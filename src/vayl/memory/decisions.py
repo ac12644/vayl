@@ -55,7 +55,7 @@ class Decisions:
         """Snapshot `beliefs` (a list of provenance dicts, e.g. from query(with_provenance=True))
         behind a decision `summary`. `anchor` optionally binds this decision to the audit-chain head
         at decision time. Returns (decision_id, entry_hash — the signed receipt digest)."""
-        ts = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+        ts = datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds")
         summary = str(summary)[:500]
         snap = json.dumps(beliefs, sort_keys=True, default=str)
         digest = self._digest(ts, user_id, agent_id, run_id, summary, snap, anchor)
@@ -142,7 +142,7 @@ class Decisions:
 
     def purge(self, older_than_days):
         """Retention (Art. 5(1)(e)): hard-delete this tenant's decisions older than N days."""
-        cutoff = (datetime.datetime.now(datetime.timezone.utc)
+        cutoff = (datetime.datetime.now(datetime.UTC)
                   - datetime.timedelta(days=float(older_than_days))).isoformat(timespec="seconds")
         cur = self.db.execute("DELETE FROM decisions WHERE ts <= ? AND tenant_id=?", (cutoff, current_tenant()))
         self.db.commit()

@@ -164,7 +164,7 @@ def migrate(db):
         try:
             applied = _applied(db)               # read under the lock: another process may have migrated
             _check_not_newer(applied)
-            now = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+            now = datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds")
             for version, name, fn in MIGRATIONS:
                 if version not in applied:
                     fn(db)

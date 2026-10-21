@@ -49,7 +49,7 @@ mypy
 
 | Required check | What it runs |
 | --- | --- |
-| `test (3.10)`, `test (3.11)`, `test (3.12)` | ruff, mypy, an import smoke test, and `pytest` on each Python version. On 3.12 it also runs `pip-audit`, which fails on a known-vulnerable dependency. |
+| `test (3.11)`, `test (3.12)` | ruff, mypy, an import smoke test, and `pytest` on each Python version. On 3.12 it also runs `pip-audit`, which fails on a known-vulnerable dependency. |
 | `integration` | The Postgres 17 and Neo4j 5 suites against real services. Fails if any test is skipped. |
 
 CodeQL also analyses every pull request to `main` and reports to the Security tab. TS SDK CI runs when `clients/typescript/` changes. Neither is a required check.

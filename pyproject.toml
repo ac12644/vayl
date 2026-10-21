@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vayl-mcp"
-version = "0.8.0"
+version = "0.9.0"
 description = "Vayl — the reconciling memory layer for AI agents, over MCP. Remembers what's true now, forgets correctly."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Abhishek Chauhan", email = "ac12644@gmail.com" }]
 keywords = ["mcp", "memory", "agents", "llm", "reconciliation"]
@@ -15,7 +15,6 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
@@ -88,15 +87,16 @@ line-length = 120
 extend-exclude = ["benchmarks", "research"]
 
 [tool.ruff.lint]
-# E/W pycodestyle, F pyflakes, I isort, B bugbear (likely bugs), UP pyupgrade (py3.10+ idioms)
+# E/W pycodestyle, F pyflakes, I isort, B bugbear (likely bugs), UP pyupgrade (py3.11+ idioms)
 select = ["E", "F", "W", "I", "B", "UP"]
 # The codebase uses a deliberately compact one-liner style (semicolons, grouped
 # imports, single-line ifs). We keep the real checks (unused imports/vars via F,
 # whitespace via W, import order via I) and drop the purely-stylistic ones.
-ignore = ["E501", "E701", "E702", "E401", "E741"]
+# UP042: StrEnum would change str(member) ("Action.ADD" -> "ADD"), which leaks into tool output.
+ignore = ["E501", "E701", "E702", "E401", "E741", "UP042"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 files = ["src/vayl"]
 # check the bodies of unannotated functions too — that is where most of this codebase lives
 check_untyped_defs = true

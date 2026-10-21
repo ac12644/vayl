@@ -11,7 +11,7 @@ icon: bolt
 
 ## What you need
 
-* **Python 3.10 or newer.**
+* **Python 3.11 or newer.**
 * **A model.** One chat model extracts facts and writes answers, and an embedder powers retrieval. Use OpenAI, a local model through Ollama, or any OpenAI-compatible endpoint.
 * **An MCP client**: Claude Desktop, Cursor, Claude Code, or your own agent.
 
@@ -29,7 +29,7 @@ vayl-mcp --version
 ```
 
 ```
-vayl-mcp 0.8.0
+vayl-mcp 0.9.0
 ```
 
 Optional extras:

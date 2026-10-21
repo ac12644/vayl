@@ -15,7 +15,7 @@ Installing `vayl-mcp` puts five commands on your `PATH`. Two run the MCP server,
 | `vayl-demo` | Offline demo of reconciliation. No keys needed. |
 | `vayl-license` | Vendor-side: generate the signing keypair and mint customer licenses. |
 
-Output below was captured from vayl 0.8.0.
+Output below was captured from vayl 0.9.0.
 
 ## vayl-mcp
 
@@ -37,7 +37,7 @@ Configuration: environment variables, see https://vayl.gitbook.io/vayl-docs
 
 ```
 $ vayl-mcp --version
-vayl-mcp 0.8.0
+vayl-mcp 0.9.0
 ```
 
 `--help` and `--version` answer before the database is opened, so they don't create `vayl.db` in the current directory. On start, the server validates settings such as `LLM_PROVIDER` and `VAYL_LOG_FORMAT` and exits with an error naming a bad value. Logs go to stderr; stdout belongs to the MCP protocol.
@@ -62,7 +62,7 @@ Configuration: environment variables, see https://vayl.gitbook.io/vayl-docs
 
 ```
 $ vayl-server --version
-vayl-server 0.8.0
+vayl-server 0.9.0
 ```
 
 On start it prints the endpoint (the uvicorn lines go to stderr):
