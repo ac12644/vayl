@@ -3,6 +3,15 @@
 All notable changes to Vayl are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.8.1] — 2026-10-22
+
+Packaging only: no code change.
+
+### Added
+- Vayl is listed in the official MCP Registry as `io.github.ac12644/vayl`. `server.json` describes
+  the PyPI package, and the README carries the `mcp-name` line the registry uses to verify ownership.
+- `glama.json` names the maintainer for the Glama MCP directory.
+
 ## [0.8.0] — 2026-10-21
 
 Moves to FastMCP 4 and the MCP Python SDK v2, fixes the Python client's HTTP mode on the new SDK, and
@@ -332,6 +341,7 @@ old, removals retract, ambiguous input is flagged, and history stays queryable �
 (`vayl-mcp`) or an authenticated team server (`vayl-server`). SQLite by default, optional Postgres;
 encryption at rest, an Ed25519-signed tamper-evident audit chain, RBAC, and GDPR tools.
 
+[0.8.1]: https://github.com/ac12644/vayl/releases/tag/v0.8.1
 [0.8.0]: https://github.com/ac12644/vayl/releases/tag/v0.8.0
 [0.7.0]: https://github.com/ac12644/vayl/releases/tag/v0.7.0
 [0.6.0]: https://github.com/ac12644/vayl/releases/tag/v0.6.0

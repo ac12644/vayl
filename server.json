@@ -1,0 +1,36 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.ac12644/vayl",
+  "title": "Vayl",
+  "description": "Reconciling memory for coding agents: a changed decision retires the old one, with history kept.",
+  "repository": {
+    "url": "https://github.com/ac12644/vayl",
+    "source": "github"
+  },
+  "websiteUrl": "https://vayl.gitbook.io/vayl-docs",
+  "version": "0.8.1",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "vayl-mcp",
+      "version": "0.8.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "OPENAI_API_KEY",
+          "description": "OpenAI key for extraction and embeddings. Leave unset to use a local Ollama model.",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "VAYL_DB",
+          "description": "Absolute path of the SQLite memory database.",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}
