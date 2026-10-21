@@ -56,7 +56,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vayl-dev/vayl.git",
+    "url": "git+https://github.com/ac12644/vayl.git",
     "directory": "clients/typescript"
   },
   "homepage": "https://vayl.gitbook.io/vayl-docs"

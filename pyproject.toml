@@ -27,10 +27,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/vayl-dev/vayl"
+Homepage = "https://github.com/ac12644/vayl"
 Documentation = "https://vayl.gitbook.io/vayl-docs"
-Repository = "https://github.com/vayl-dev/vayl"
-Issues = "https://github.com/vayl-dev/vayl/issues"
+Repository = "https://github.com/ac12644/vayl"
+Issues = "https://github.com/ac12644/vayl/issues"
 
 [project.optional-dependencies]
 # Optional Neo4j graph projection for deep multi-hop / relational queries.

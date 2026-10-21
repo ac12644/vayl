@@ -21,7 +21,7 @@ info:
       (1–64 characters of `A-Z a-z 0-9 . _ : -`) is reused; otherwise one is generated.
   license:
     name: Apache-2.0
-    url: https://github.com/vayl-dev/vayl/blob/main/LICENSE
+    url: https://github.com/ac12644/vayl/blob/main/LICENSE
 externalDocs:
   description: Vayl documentation
   url: https://vayl.gitbook.io/vayl-docs/documentation

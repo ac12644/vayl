@@ -11,7 +11,7 @@
 # Put TLS/ingress in front (see DEPLOY.md); do not expose :8080 to the internet directly.
 services:
   vayl:
-    image: "${VAYL_IMAGE:-ghcr.io/vayl-dev/vayl:latest}"   # pin a version in .env for deliberate upgrades
+    image: "${VAYL_IMAGE:-ghcr.io/ac12644/vayl:latest}"   # pin a version in .env for deliberate upgrades
     pull_policy: always
     ports:
       - "8080:8080"

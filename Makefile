@@ -9,7 +9,7 @@
 # Override: make push IMAGE=ghcr.io/you/vayl VERSION=0.2.0
 
 PY      ?= .venv/bin/python
-IMAGE   ?= ghcr.io/vayl-dev/vayl
+IMAGE   ?= ghcr.io/ac12644/vayl
 VERSION ?= $(shell grep -m1 '^version' pyproject.toml | cut -d'"' -f2)
 PLATFORMS ?= linux/amd64,linux/arm64
 

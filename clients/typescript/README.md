@@ -1,6 +1,6 @@
 # @vayl.dev/client (TypeScript)
 
-TypeScript client for [Vayl](https://github.com/vayl-dev/vayl) — reconciling memory for AI agents.
+TypeScript client for [Vayl](https://github.com/ac12644/vayl) — reconciling memory for AI agents.
 Call the MCP tools as methods instead of hand-writing `tools/call` JSON.
 
 ```bash
@@ -83,7 +83,7 @@ const agent = new Agent({
 ```
 
 `vaylTools(m, { include: [...] , exclude: [...] })` narrows the tool set. (Python agents — LangGraph,
-OpenAI Agents SDK, CrewAI — are served from the [Python package](https://github.com/vayl-dev/vayl).)
+OpenAI Agents SDK, CrewAI — are served from the [Python package](https://github.com/ac12644/vayl).)
 
 ## API
 

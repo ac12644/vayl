@@ -196,7 +196,7 @@ not by itself make your processing compliant.
 
 Please report security issues **privately** — do not open a public issue or PR.
 
-- **Preferred:** GitHub [private vulnerability reporting](https://github.com/vayl-dev/vayl/security/advisories/new) (repo → **Security** → **Report a vulnerability**).
+- **Preferred:** GitHub [private vulnerability reporting](https://github.com/ac12644/vayl/security/advisories/new) (repo → **Security** → **Report a vulnerability**).
 - **Email:** ac12644@gmail.com
 
 Include a description, the affected version or commit, and steps to reproduce. We aim to

@@ -12,7 +12,7 @@ The full contributor guide lives in the docs:
 ## TL;DR
 
 ```bash
-git clone https://github.com/vayl-dev/vayl && cd vayl
+git clone https://github.com/ac12644/vayl && cd vayl
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,server,postgres]"
 pytest            # offline unit tests (deterministic, no LLM/network)
@@ -22,7 +22,7 @@ ruff check .      # lint
 ## Good first contributions
 
 New here? These are self-contained and have a clear template to copy — look for the
-[`good first issue`](https://github.com/vayl-dev/vayl/labels/good%20first%20issue) label, or start with one of these:
+[`good first issue`](https://github.com/ac12644/vayl/labels/good%20first%20issue) label, or start with one of these:
 
 - **Add a slot-schema preset for a domain you know** (legal, devops, real-estate, gaming, recruiting…).
   A preset is one JSON file that gives an agent a declared vocabulary so its memory reconciles reliably.
@@ -53,7 +53,7 @@ By contributing, you agree your contributions are licensed under **Apache-2.0**.
 
 ## Reporting issues
 
-- **Bugs & feature requests:** open a [GitHub issue](https://github.com/vayl-dev/vayl/issues).
+- **Bugs & feature requests:** open a [GitHub issue](https://github.com/ac12644/vayl/issues).
 - **Security vulnerabilities:** please do **not** open a public issue — contact the maintainer
   privately instead. Vayl's threat model and shared-responsibility matrix are in
   [`SECURITY.md`](SECURITY.md).

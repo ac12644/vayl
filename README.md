@@ -9,7 +9,7 @@
 <br>
 
 [![PyPI](https://img.shields.io/pypi/v/vayl-mcp?color=346ddb&label=pypi)](https://pypi.org/project/vayl-mcp/)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/vayl-dev/vayl/badge)](https://scorecard.dev/viewer/?uri=github.com/vayl-dev/vayl)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/ac12644/vayl/badge)](https://scorecard.dev/viewer/?uri=github.com/ac12644/vayl)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B%20%7C%203.14t-blue)
 ![Tests](https://img.shields.io/badge/tests-551%20passing-brightgreen)
@@ -419,10 +419,10 @@ The container runs as a non-root user; the SQLite DB + encryption/signing keys p
 
 ## Contributing
 
-Contributions are welcome — bug reports, docs, tests, new LLM providers, and reconciliation edge cases especially. New here? A [**good first issue**](https://github.com/vayl-dev/vayl/labels/good%20first%20issue) (e.g. adding a preset for your domain) is a great start. Vayl keeps a lean core and its unit tests are fully offline, so the dev loop is fast and needs no API key.
+Contributions are welcome — bug reports, docs, tests, new LLM providers, and reconciliation edge cases especially. New here? A [**good first issue**](https://github.com/ac12644/vayl/labels/good%20first%20issue) (e.g. adding a preset for your domain) is a great start. Vayl keeps a lean core and its unit tests are fully offline, so the dev loop is fast and needs no API key.
 
 ```bash
-git clone https://github.com/vayl-dev/vayl && cd vayl
+git clone https://github.com/ac12644/vayl && cd vayl
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,server,postgres]"      # editable install + dev & optional extras
 

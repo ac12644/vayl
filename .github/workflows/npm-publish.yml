@@ -7,7 +7,7 @@ name: npm publish
 # Setup: add a granular, publish-only npm access token as the `NPM_TOKEN` GitHub
 # Actions secret (Settings → Secrets and variables → Actions). Use a freshly rotated
 # token — never one that has been pasted anywhere. To move to tokenless publishing
-# later, register a Trusted Publisher on npm (repo vayl-dev/vayl, workflow
+# later, register a Trusted Publisher on npm (repo ac12644/vayl, workflow
 # npm-publish.yml) and drop the NODE_AUTH_TOKEN env below.
 
 on:

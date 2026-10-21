@@ -4,7 +4,7 @@ name: release
 # (OIDC — no stored API tokens). The tag drives the release; PyPI verifies the
 # workflow identity. Configure the trusted publisher once at
 # https://pypi.org/manage/project/vayl-mcp/settings/publishing/
-# (owner: vayl-dev, repo: vayl, workflow: release.yml, environment: pypi).
+# (owner: ac12644, repo: vayl, workflow: release.yml, environment: pypi).
 
 on:
   push:
