@@ -63,7 +63,7 @@ def _http_json(req, timeout, retries=None):
                     time.sleep(_retry_after(r.headers, i)); continue
                 if r.status >= 400:
                     raise urllib.error.HTTPError(req.full_url, r.status,
-                                                 r.data[:200].decode("utf-8", "replace"),
+                                                 r.data[:2000].decode("utf-8", "replace"),
                                                  r.headers, None)  # type: ignore[arg-type]  # _retry_after only needs .get()
                 return json.loads(r.data)
             with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -81,6 +81,23 @@ def _http_json(req, timeout, retries=None):
                     and isinstance(exc, _urllib3.exceptions.HTTPError) and i < retries - 1:
                 time.sleep(min(2 ** i, 20) + random.random()); continue
             raise
+
+
+def http_error_reason(e):
+    """'HTTP 400: <provider's error message>' for an HTTPError, else ''. Only for requests that carry
+    no user data (health's fixed probe): providers can echo the request back in their message."""
+    if not isinstance(e, urllib.error.HTTPError):
+        return ""
+    body = ""
+    with contextlib.suppress(Exception):   # urlopen errors carry the body; pool errors put it in .msg
+        body = e.read().decode("utf-8", "replace")
+    body = body or str(e.msg or "")
+    try:
+        err = json.loads(body).get("error")
+        msg = err.get("message", "") if isinstance(err, dict) else str(err or "")
+    except Exception:
+        msg = ""
+    return f"HTTP {e.code}: {msg[:300]}" if msg else f"HTTP {e.code}"
 
 
 _PROVIDERS = ("anthropic", "openai", "groq")

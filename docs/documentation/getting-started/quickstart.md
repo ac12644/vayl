@@ -194,7 +194,7 @@ llm: ok
 graph: disabled
 ```
 
-A failing dependency shows as `FAIL` with only the error type, such as `embedder: FAIL (NewConnectionError)` when nothing is listening at the embedder URL (the exact type depends on your HTTP stack; details go to the server log). `model=(default)` means `OPENAI_MODEL` is unset and the default above applies.
+A failing dependency shows as `FAIL` with the reason. When the API answers with an error, that's its status and message, such as `llm: FAIL (HTTP 401: Incorrect API key provided …)`; when it can't be reached, it's the error type, such as `embedder: FAIL (NewConnectionError)` when nothing is listening at the embedder URL (the exact type depends on your HTTP stack). `model=(default)` means `OPENAI_MODEL` is unset and the default above applies.
 {% endstep %}
 {% endstepper %}
 

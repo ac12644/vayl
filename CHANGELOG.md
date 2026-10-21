@@ -5,12 +5,25 @@ All notable changes to Vayl are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+- **Vayl tells MCP clients when to use it.** The server now sends MCP `instructions` at initialize:
+  call `remember` when the user states or changes a decision, `recall` before answering questions
+  about the project, `forget` for removals. In a live Claude Code test without them, "Remember for
+  this project: our database is Postgres" went to a notes file and never reached Vayl; with them,
+  Claude Code used Vayl unprompted. A `CLAUDE.md` snippet is now optional.
+
 ### Fixed
 - **gpt-6 models work.** Vayl recognised only `gpt-5*` and o-series as OpenAI reasoning models, so
   `OPENAI_MODEL=gpt-6-luna` (or any gpt-6) was sent `temperature: 0` and `max_tokens`, which those
   models reject: every `remember` and `recall` failed with an HTTP error. gpt-5 and later now get
   `max_completion_tokens` and the lowest reasoning effort the family supports (`minimal` on gpt-5,
   `none` from gpt-6). `OPENAI_REASONING_EFFORT` still overrides it.
+- **A rejected model call explains itself.** `health` used to report only `llm: FAIL (HTTPError)`,
+  and a failing tool only an opaque reference, so a wrong key, model name or parameter looked the same.
+  `health` now shows the provider's status and message (its probe carries no memory content), for
+  example `llm: FAIL (HTTP 401: Incorrect API key provided …)`. A tool that fails this way names the
+  HTTP status and points to `health`; it still never shows the provider's text, which can quote the
+  request.
 
 ## [0.9.0] — 2026-10-22
 
