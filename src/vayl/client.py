@@ -72,6 +72,7 @@ class Vayl:
         self._q: asyncio.Queue | None = None             # created on the loop
         self._tool_accepts = {}                           # tool name -> set of accepted param names
         self._connected: concurrent.futures.Future[bool] = concurrent.futures.Future()  # session live
+        self._served: concurrent.futures.Future[None] = concurrent.futures.Future()     # _serve ended
         self._closed = False
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(target=self._loop.run_forever, name="vayl-client", daemon=True)
@@ -79,7 +80,11 @@ class Vayl:
         # Run the whole session lifecycle inside ONE task so anyio cancel scopes enter/exit in the
         # same task (a per-call open/close would violate that and error).
         self._loop.call_soon_threadsafe(lambda: self._loop.create_task(self._serve()))
-        self._connected.result(timeout=_CONNECT_TIMEOUT)  # raises if connect failed
+        try:
+            self._connected.result(timeout=_CONNECT_TIMEOUT)  # raises if connect failed
+        except BaseException:
+            self.close()       # don't leave the loop thread and half-open transports behind
+            raise
 
     # ── the async session, owned entirely by the background loop ──
     async def _serve(self):
@@ -109,6 +114,9 @@ class Vayl:
         except Exception as e:                            # connect failed → surface to the constructor
             if not self._connected.done():
                 self._connected.set_exception(self._connect_error(e))
+        finally:
+            if not self._served.done():
+                self._served.set_result(None)
 
     def _connect_error(self, e):
         """One readable error for a failed connection. The transports raise nested exception groups
@@ -183,8 +191,16 @@ class Vayl:
         try:
             if self._q is not None:
                 self._loop.call_soon_threadsafe(self._q.put_nowait, None)  # let _serve unwind in-task
+            # Wait for the session and transports to close inside their own task before stopping the
+            # loop. Stopping first left them half-closed, and Python 3.10 could crash at exit.
+            self._served.result(timeout=_CONNECT_TIMEOUT)
+        except Exception:                                   # noqa: BLE001 — best-effort shutdown
+            pass
         finally:
             self._loop.call_soon_threadsafe(self._loop.stop)
+            self._thread.join(timeout=_CONNECT_TIMEOUT)
+            if not self._thread.is_alive():
+                self._loop.close()
 
     def __enter__(self):
         return self

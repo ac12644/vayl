@@ -102,6 +102,9 @@ def test_http_round_trip_against_a_real_server(monkeypatch):
             assert "edition" in v.call("license_status")              # a real tool call over HTTP
         with pytest.raises(VaylError, match="could not connect to http://127.0.0.1.*API key"):
             Vayl(url=f"http://127.0.0.1:{port}/mcp", api_key="vayl_sk_not-a-real-key")   # refused
+        # neither a closed client nor a failed connect may leave its loop thread running: on Python
+        # 3.10 a leftover loop with half-open transports crashed the interpreter at exit
+        assert not [t for t in threading.enumerate() if t.name == "vayl-client" and t.is_alive()]
     finally:
         server.should_exit = True
         thread.join(timeout=10)
