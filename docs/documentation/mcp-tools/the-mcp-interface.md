@@ -56,7 +56,7 @@ Pass the arguments as a JSON object under `params.arguments`:
   "jsonrpc": "2.0", "id": 2, "method": "tools/call",
   "params": {
     "name": "remember",
-    "arguments": { "text": "We switched from Redux to Zustand", "user_id": "proj_7" }
+    "arguments": { "text": "Acme's invoice bounced. Account suspended until payment clears.", "user_id": "cust_5521" }
   }
 }
 ```
@@ -68,9 +68,9 @@ Every Vayl tool returns one text string. The MCP result wraps it in `content`, a
   "jsonrpc": "2.0", "id": 2,
   "result": {
     "_meta": {"fastmcp": {"wrap_result": true}},
-    "content": [{"type": "text", "text": "Stored: [SUPERSEDE] state = Zustand"}],
-    "structuredContent": {"result": "Stored: [SUPERSEDE] state = Zustand"},
-    "isError": false
+    "content": [{"text": "Stored: [ARCHIVE] acme_invoice_payment_status = bounced; [SUPERSEDE] account_status = suspended", "type": "text"}],
+    "isError": false,
+    "structuredContent": {"result": "Stored: [ARCHIVE] acme_invoice_payment_status = bounced; [SUPERSEDE] account_status = suspended"}
   }
 }
 ```

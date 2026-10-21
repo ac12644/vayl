@@ -84,9 +84,10 @@ pip install vayl-mcp
 #### Watch it reconcile
 
 ```
-"We use Redux."                      → remembered
-"Actually, we switched to Zustand."  → Redux retired, Zustand active
-"What do we use?"                    → Zustand (worded by your model)
+remember("Patient is on warfarin 5 mg daily.")       → active_medication = warfarin
+remember("Warfarin stopped. Started apixaban.")      → held for approval
+confirm_change(4)                                    → apixaban active, warfarin in history
+recall("What anticoagulant is the patient on?")      → apixaban (worded by your model)
 ```
 {% endstep %}
 {% endstepper %}

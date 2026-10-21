@@ -7,7 +7,7 @@ icon: terminal
 
 # Claude Code
 
-Add Vayl to Claude Code and the agent keeps your project's decisions current across sessions: when you switch from Redux to Zustand, the old answer is retired instead of sitting next to the new one. You register Vayl as an MCP server with `claude mcp add`, then tell the agent when to use it in `CLAUDE.md`.
+Add Vayl to Claude Code and the agent keeps your project's decisions current across sessions: when you switch from Redux to Zustand, the old answer is retired instead of sitting next to the new one. You register Vayl as an MCP server with `claude mcp add`. Vayl tells the agent when to use its tools, and a `CLAUDE.md` rule is optional.
 
 Two setups:
 
