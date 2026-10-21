@@ -56,7 +56,7 @@ Authorization beyond that (capability and scope) happens inside the tool and com
 
 ## Call a tool with curl
 
-This session was run against a real `vayl-server` 0.7.0 on a temporary database, with the key redacted.
+This session was run against a real `vayl-server` 0.8.0 on a temporary database, with the key redacted.
 
 {% stepper %}
 {% step %}
@@ -106,7 +106,7 @@ x-request-id: docs-demo-1
 Transfer-Encoding: chunked
 
 event: message
-data: {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18","capabilities":{"experimental":{},"logging":{},"prompts":{"listChanged":true},"resources":{"subscribe":false,"listChanged":true},"tools":{"listChanged":true},"extensions":{"io.modelcontextprotocol/ui":{}}},"serverInfo":{"name":"vayl","version":"0.7.0"}}}
+data: {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18","capabilities":{"logging":{},"prompts":{"listChanged":true},"resources":{"subscribe":false,"listChanged":true},"tools":{"listChanged":true}},"serverInfo":{"name":"vayl","version":"0.8.0"}}}
 ```
 
 `serverInfo.version` is Vayl's version, the same as `vayl-server --version` prints. Because the server is stateless, you can call `tools/list` or `tools/call` without initializing first.
