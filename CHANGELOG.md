@@ -3,7 +3,10 @@
 All notable changes to Vayl are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.8.0] â€” 2026-10-21
+
+Moves to FastMCP 4 and the MCP Python SDK v2, fixes the Python client's HTTP mode on the new SDK, and
+makes the client shut down cleanly. No change to the server's tools or wire format.
 
 ### Changed
 - **Moved to FastMCP 4 and MCP Python SDK v2** (`fastmcp>=4.1,<5`, `mcp>=2.3,<3`). FastMCP 4 requires
@@ -329,6 +332,7 @@ old, removals retract, ambiguous input is flagged, and history stays queryable â
 (`vayl-mcp`) or an authenticated team server (`vayl-server`). SQLite by default, optional Postgres;
 encryption at rest, an Ed25519-signed tamper-evident audit chain, RBAC, and GDPR tools.
 
+[0.8.0]: https://github.com/ac12644/vayl/releases/tag/v0.8.0
 [0.7.0]: https://github.com/ac12644/vayl/releases/tag/v0.7.0
 [0.6.0]: https://github.com/ac12644/vayl/releases/tag/v0.6.0
 [0.5.1]: https://github.com/ac12644/vayl/releases/tag/v0.5.1

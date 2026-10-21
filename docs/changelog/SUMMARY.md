@@ -4,6 +4,7 @@
 
 ## 2026
 
+* [v0.8.0 — FastMCP 4 and MCP SDK v2](2026/v0.8.0-fastmcp-4-and-mcp-sdk-v2.md)
 * [v0.7.0 — Tenant isolation and correctness](2026/v0.7.0-tenant-isolation-and-correctness.md)
 * [v0.6.0 — Approval gate, HTTP fix and correct defaults](2026/v0.6.0-approval-gate-http-fix-and-correct-defaults.md)
 * [v0.5.1 — Hardening patch](2026/v0.5.1-hardening-patch.md)
