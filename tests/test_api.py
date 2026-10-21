@@ -220,14 +220,14 @@ def test_irreversible_tools_are_marked_destructive():
     t = tools()
     for name in DESTRUCTIVE:
         a = t[name]
-        assert a.destructiveHint is True, f"{name} must warn clients before erasing"
-        assert a.readOnlyHint is False, name
+        assert a.destructive_hint is True, f"{name} must warn clients before erasing"
+        assert a.read_only_hint is False, name
 
 
 def test_reads_are_marked_read_only():
     t = tools()
     for name in READ_ONLY:
-        assert t[name].readOnlyHint is True, f"{name} should be safe for a client to auto-run"
+        assert t[name].read_only_hint is True, f"{name} should be safe for a client to auto-run"
 
 
 def test_writes_change_memory_but_are_not_destructive():
@@ -235,13 +235,13 @@ def test_writes_change_memory_but_are_not_destructive():
     t = tools()
     for name in WRITES:
         a = t[name]
-        assert a.readOnlyHint is False and a.destructiveHint is False, name
+        assert a.read_only_hint is False and a.destructive_hint is False, name
 
 
 def test_llm_backed_tools_declare_open_world():
     t = tools()
     for name in ("remember", "recall", "health"):
-        assert t[name].openWorldHint is True, f"{name} calls an external LLM/embedder"
+        assert t[name].open_world_hint is True, f"{name} calls an external LLM/embedder"
 
 
 # ══════════════════════════════════════════════════════════════════

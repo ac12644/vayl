@@ -52,7 +52,9 @@ def _text(result):
     """Join the text parts of an MCP CallToolResult; raise VaylError if the tool flagged an error."""
     parts = [c.text for c in (result.content or []) if getattr(c, "type", "") == "text"]
     body = "\n".join(parts)
-    if getattr(result, "isError", False):
+    # `is_error` directly, not getattr(..., False): if the field were ever renamed again, a default
+    # would turn every denied or failed call into a silent success.
+    if result.is_error:
         raise VaylError(body or "tool returned an error")
     return body
 
@@ -70,6 +72,7 @@ class Vayl:
         self._q: asyncio.Queue | None = None             # created on the loop
         self._tool_accepts = {}                           # tool name -> set of accepted param names
         self._connected: concurrent.futures.Future[bool] = concurrent.futures.Future()  # session live
+        self._served: concurrent.futures.Future[None] = concurrent.futures.Future()     # _serve ended
         self._closed = False
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(target=self._loop.run_forever, name="vayl-client", daemon=True)
@@ -77,7 +80,11 @@ class Vayl:
         # Run the whole session lifecycle inside ONE task so anyio cancel scopes enter/exit in the
         # same task (a per-call open/close would violate that and error).
         self._loop.call_soon_threadsafe(lambda: self._loop.create_task(self._serve()))
-        self._connected.result(timeout=_CONNECT_TIMEOUT)  # raises if connect failed
+        try:
+            self._connected.result(timeout=_CONNECT_TIMEOUT)  # raises if connect failed
+        except BaseException:
+            self.close()       # don't leave the loop thread and half-open transports behind
+            raise
 
     # ── the async session, owned entirely by the background loop ──
     async def _serve(self):
@@ -87,10 +94,13 @@ class Vayl:
         self._q = asyncio.Queue()
         try:
             if self._url:
-                from mcp.client.streamable_http import streamablehttp_client
+                import httpx2
+                from mcp.client.streamable_http import streamable_http_client
+                # MCP SDK v2 takes a configured HTTP client instead of a headers= argument.
                 headers = {"Authorization": f"Bearer {self._api_key}"} if self._api_key else {}
-                transport = streamablehttp_client(self._url, headers=headers)
-                async with transport as streams, ClientSession(streams[0], streams[1]) as session:
+                async with httpx2.AsyncClient(headers=headers) as http, \
+                        streamable_http_client(self._url, http_client=http) as (read, write), \
+                        ClientSession(read, write) as session:
                     await session.initialize()
                     await self._loop_serve(session)
             else:
@@ -103,13 +113,28 @@ class Vayl:
                     await self._loop_serve(session)
         except Exception as e:                            # connect failed → surface to the constructor
             if not self._connected.done():
-                self._connected.set_exception(e)
+                self._connected.set_exception(self._connect_error(e))
+        finally:
+            if not self._served.done():
+                self._served.set_result(None)
+
+    def _connect_error(self, e):
+        """One readable error for a failed connection. The transports raise nested exception groups
+        ("unhandled errors in a TaskGroup"), so dig out the single root cause and name the target."""
+        root = e
+        while getattr(root, "exceptions", None) and len(root.exceptions) == 1:
+            root = root.exceptions[0]
+        target = self._url or f"`{self._command}` over stdio"
+        hint = " Check the URL and that the API key is valid and active." if self._url else ""
+        err = VaylError(f"could not connect to {target}: {type(root).__name__}: {root}.{hint}")
+        err.__cause__ = root
+        return err
 
     async def _loop_serve(self, session):
         # Learn each tool's parameters so `call()` only sends scope keys a tool actually accepts.
         try:
             listed = await session.list_tools()
-            self._tool_accepts = {t.name: set((t.inputSchema or {}).get("properties", {}) or {})
+            self._tool_accepts = {t.name: set((t.input_schema or {}).get("properties", {}) or {})
                                   for t in listed.tools}
         except Exception:
             self._tool_accepts = {}   # best-effort: fall back to sending the full scope
@@ -166,8 +191,16 @@ class Vayl:
         try:
             if self._q is not None:
                 self._loop.call_soon_threadsafe(self._q.put_nowait, None)  # let _serve unwind in-task
+            # Wait for the session and transports to close inside their own task before stopping the
+            # loop. Stopping first left them half-closed, and Python 3.10 could crash at exit.
+            self._served.result(timeout=_CONNECT_TIMEOUT)
+        except Exception:                                   # noqa: BLE001 — best-effort shutdown
+            pass
         finally:
             self._loop.call_soon_threadsafe(self._loop.stop)
+            self._thread.join(timeout=_CONNECT_TIMEOUT)
+            if not self._thread.is_alive():
+                self._loop.close()
 
     def __enter__(self):
         return self
