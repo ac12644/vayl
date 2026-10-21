@@ -7,13 +7,13 @@ icon: code-pull-request
 
 # Contributing
 
-Bug reports, docs, tests, new LLM providers, and reconciliation edge cases are all welcome. This page covers the workflow and conventions. The short version is in [CONTRIBUTING.md](https://github.com/vayl-dev/vayl/blob/main/CONTRIBUTING.md) on GitHub, and this page follows it.
+Bug reports, docs, tests, new LLM providers, and reconciliation edge cases are all welcome. This page covers the workflow and conventions. The short version is in [CONTRIBUTING.md](https://github.com/ac12644/vayl/blob/main/CONTRIBUTING.md) on GitHub, and this page follows it.
 
 By contributing, you agree that your contributions are licensed under Apache-2.0.
 
 ## Where to start
 
-Look for the [`good first issue`](https://github.com/vayl-dev/vayl/labels/good%20first%20issue) label, or pick one of these self-contained tasks:
+Look for the [`good first issue`](https://github.com/ac12644/vayl/labels/good%20first%20issue) label, or pick one of these self-contained tasks:
 
 * **A slot-schema preset for a domain you know** (legal, devops, real estate, recruiting, ...). A preset is one JSON file. Copy `src/vayl/presets/coding.json` or `support.json`, add assertions for it to `tests/test_presets.py`, and it is bundled into the wheel automatically. Users enable it with `VAYL_SLOT_SCHEMA=preset:<name>`. This is the easiest way to contribute.
 * **A framework adapter** for another agent framework (LlamaIndex, Pydantic AI, AutoGen, ...). Python adapters live in `src/vayl/integrations/`, subclass `BaseVaylMemory`, and use `langgraph.py` as the template. TypeScript adapters are subpath modules under `clients/typescript/src/integrations/`. Every adapter exposes the same tool set from `_common`.
@@ -27,7 +27,7 @@ For anything substantial, **open an issue first** so the approach is agreed befo
 {% step %}
 ### Fork and branch
 
-Fork [vayl-dev/vayl](https://github.com/vayl-dev/vayl), clone your fork, and create a branch from `main`. Set up the checkout as described in [Local development](local-development.md).
+Fork [ac12644/vayl](https://github.com/ac12644/vayl), clone your fork, and create a branch from `main`. Set up the checkout as described in [Local development](local-development.md).
 {% endstep %}
 
 {% step %}
@@ -96,8 +96,8 @@ In the docs, use relative links to `.md` files (for example `../reference/config
 
 ## Reporting bugs and security issues
 
-* **Bugs and feature requests:** open a [GitHub issue](https://github.com/vayl-dev/vayl/issues). Include your Vayl version (`vayl-mcp --version`) and the output of the `health` tool. Leave out DEBUG logs from real data, since they can contain memory content.
-* **Security vulnerabilities:** do not open a public issue or pull request. Report privately through GitHub [private vulnerability reporting](https://github.com/vayl-dev/vayl/security/advisories/new) (repo → **Security** → **Report a vulnerability**), or by the email address in [SECURITY.md](https://github.com/vayl-dev/vayl/blob/main/SECURITY.md). The maintainers aim to acknowledge reports within 3 business days.
+* **Bugs and feature requests:** open a [GitHub issue](https://github.com/ac12644/vayl/issues). Include your Vayl version (`vayl-mcp --version`) and the output of the `health` tool. Leave out DEBUG logs from real data, since they can contain memory content.
+* **Security vulnerabilities:** do not open a public issue or pull request. Report privately through GitHub [private vulnerability reporting](https://github.com/ac12644/vayl/security/advisories/new) (repo → **Security** → **Report a vulnerability**), or by the email address in [SECURITY.md](https://github.com/ac12644/vayl/blob/main/SECURITY.md). The maintainers aim to acknowledge reports within 3 business days.
 
 ## Next steps
 

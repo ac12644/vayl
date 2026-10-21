@@ -39,5 +39,5 @@ What changed in each Vayl release, newest first. Upgrade notes are on each relea
 | v0.1.0               | 27 Jul 2026 | Initial release                                                                                                        |
 
 {% hint style="info" %}
-Vayl is open source (Apache-2.0). The complete history is in [CHANGELOG.md](https://github.com/vayl-dev/vayl/blob/main/CHANGELOG.md) and the [GitHub releases](https://github.com/vayl-dev/vayl/releases).
+Vayl is open source (Apache-2.0). The complete history is in [CHANGELOG.md](https://github.com/ac12644/vayl/blob/main/CHANGELOG.md) and the [GitHub releases](https://github.com/ac12644/vayl/releases).
 {% endhint %}

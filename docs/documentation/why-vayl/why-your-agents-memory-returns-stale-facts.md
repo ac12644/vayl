@@ -34,8 +34,8 @@ Two small, author-run benchmarks, both with `gpt-4o-mini`. The metric is **silen
 
 | Benchmark | Vayl | Mem0 | Graphiti |
 | --- | --- | --- | --- |
-| [Reconciliation comparison](https://github.com/vayl-dev/vayl/blob/main/benchmarks/results/compare_systems.md) (10 scenarios) | 0/10 silently wrong, 10/10 correct | 1/10 silently wrong, 2/10 missed | 0/10 silently wrong, 6/10 missed |
-| [Retraction battery](https://github.com/vayl-dev/vayl/blob/main/benchmarks/results/retraction_battery.md) (12 retractions + 2 controls) | 0/14 silently wrong, 12/12 retractions correct | 1/14 silently wrong, 11/12 | 3/14 silently wrong, 10/12 |
+| [Reconciliation comparison](https://github.com/ac12644/vayl/blob/main/benchmarks/results/compare_systems.md) (10 scenarios) | 0/10 silently wrong, 10/10 correct | 1/10 silently wrong, 2/10 missed | 0/10 silently wrong, 6/10 missed |
+| [Retraction battery](https://github.com/ac12644/vayl/blob/main/benchmarks/results/retraction_battery.md) (12 retractions + 2 controls) | 0/14 silently wrong, 12/12 retractions correct | 1/14 silently wrong, 11/12 | 3/14 silently wrong, 10/12 |
 
 {% hint style="warning" %}
 These are single runs on small suites written by the Vayl author. Treat them as a reproducible demonstration, not a general accuracy claim. The scripts and per-case outputs are in `benchmarks/` in the repo.

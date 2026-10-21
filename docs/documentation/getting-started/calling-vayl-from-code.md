@@ -80,7 +80,7 @@ const team = await Vayl.connect({ url: "https://memory.example.com/mcp", apiKey:
 `m.remember`, `m.recall`, `m.forget`, and `m.call(tool, args)` for any other tool. `withVayl(opts, async (m) => { ... })` connects, runs your function, and always closes. Options mirror the Python client: `url`, `apiKey`, `command`, `args`, `env`, `userId`, `agentId`, `runId`. Vercel AI SDK and Mastra adapters ship as `@vayl.dev/client/vercel` and `@vayl.dev/client/mastra`; see [Agent frameworks](../integrations/agent-frameworks.md).
 
 {% hint style="info" %}
-**Needs verification:** that `@vayl.dev/client` is published on npm at the version you expect. The source is in [`clients/typescript`](https://github.com/vayl-dev/vayl/tree/main/clients/typescript) and builds with `npm run build`.
+**Needs verification:** that `@vayl.dev/client` is published on npm at the version you expect. The source is in [`clients/typescript`](https://github.com/ac12644/vayl/tree/main/clients/typescript) and builds with `npm run build`.
 {% endhint %}
 
 ## Raw MCP (any language, no Vayl client)

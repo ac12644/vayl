@@ -8,5 +8,5 @@ icon: chart-line
 # Metrics
 
 {% openapi-operation spec="vayl-server" path="/metrics" method="get" %}
-[OpenAPI vayl-server](https://raw.githubusercontent.com/vayl-dev/vayl/main/openapi/vayl-server.yaml)
+[OpenAPI vayl-server](https://raw.githubusercontent.com/ac12644/vayl/main/openapi/vayl-server.yaml)
 {% endopenapi-operation %}
