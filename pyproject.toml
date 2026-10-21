@@ -21,8 +21,8 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "fastmcp>=3.4.5,<4",   # standalone FastMCP framework (replaces the removed bundled mcp.server.fastmcp)
-    "mcp>=1.2,<2",     # still imported directly for mcp.types.ToolAnnotations; fastmcp 3 builds on mcp v1
+    "fastmcp>=4.1,<5",   # standalone FastMCP framework; fastmcp 4 builds on MCP SDK v2
+    "mcp>=2.3,<3",       # imported directly: mcp.types.ToolAnnotations and the Python client (vayl.Vayl)
     "cryptography>=50",   # at-rest encryption + Argon2id VAYL_KEY KDF; 50 fixes PYSEC-2026-3552
 ]
 
@@ -36,7 +36,7 @@ Issues = "https://github.com/ac12644/vayl/issues"
 # Optional Neo4j graph projection for deep multi-hop / relational queries.
 graph = ["neo4j>=5"]
 # Remote HTTP transport (vayl-server): a team-shareable, authenticated MCP endpoint.
-# starlette + httpx come transitively via `mcp`; uvicorn is the ASGI server to actually run it.
+# starlette, httpx2 and uvicorn come transitively via `mcp`; the extra keeps uvicorn explicit.
 server = ["uvicorn>=0.30"]
 # OIDC SSO (M5): verify IdP-issued ID tokens (JWT/RS256). cryptography is already a core dep.
 sso = ["pyjwt>=2.13.0"]   # <2.4 is affected by CVE-2022-29217 (JWT algorithm confusion)

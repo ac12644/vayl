@@ -3,6 +3,36 @@
 All notable changes to Vayl are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- **Moved to FastMCP 4 and MCP Python SDK v2** (`fastmcp>=4.1,<5`, `mcp>=2.3,<3`). FastMCP 4 requires
+  MCP SDK v2, so the two move together. The server and its tools are unchanged on the wire. Vayl's
+  pins used to exclude these majors, so it couldn't be installed next to tools that need them.
+- The Python client's HTTP mode, `Vayl(url=…, api_key=…)`, uses SDK v2's `streamable_http_client`
+  with an `httpx2` client carrying the API key. SDK v2 removed `streamablehttp_client`, so the old
+  code failed with an `ImportError` on SDK v2.
+- Pinned GitHub Actions updated to their latest releases, including CodeQL `v3` → `v4`.
+
+### Fixed
+- A failed client connection now raises one readable `VaylError` that names the target and the root
+  cause, instead of a nested `ExceptionGroup` ("unhandled errors in a TaskGroup").
+- The client reads `CallToolResult.is_error` directly. It used `getattr(result, "isError", False)`,
+  which would have reported every denied or failed call as a success once the old field name was
+  removed.
+
+### Added
+- A test that drives `Vayl(url=…)` against a real HTTP server, including a refused key. Nothing
+  covered that path, which is how the SDK v2 break went unnoticed.
+
+### Upgrading
+- No action for servers or the stdio client.
+- If your project pins `mcp<2` or `fastmcp<4` for something else, Vayl 0.8 can't share that
+  environment; stay on Vayl 0.7 until you can move.
+- Python 3.10 is still supported, but MCP SDK v2's HTTP library (`httpx2`) dropped 3.10 after 2.14,
+  so 3.10 installs get that older version. Python 3.10 reaches end of life in October 2026, and a
+  later release will require 3.11.
+
 ## [0.7.0] — 2026-09-27
 
 Tenant isolation completed across policies, the graph, decisions, receipts, the audit log and

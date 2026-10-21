@@ -51,17 +51,17 @@ log = logging.getLogger(__name__)
 # openWorld = talks to an external service (the LLM/embedder) rather than just local state.
 
 def _ro(title, open_world=False):
-    return ToolAnnotations(title=title, readOnlyHint=True, openWorldHint=open_world)
+    return ToolAnnotations(title=title, read_only_hint=True, open_world_hint=open_world)
 
 
 def _write(title, open_world=True):
-    return ToolAnnotations(title=title, readOnlyHint=False, destructiveHint=False,
-                           idempotentHint=False, openWorldHint=open_world)
+    return ToolAnnotations(title=title, read_only_hint=False, destructive_hint=False,
+                           idempotent_hint=False, open_world_hint=open_world)
 
 
 def _destructive(title):
-    return ToolAnnotations(title=title, readOnlyHint=False, destructiveHint=True,
-                           idempotentHint=True, openWorldHint=False)
+    return ToolAnnotations(title=title, read_only_hint=False, destructive_hint=True,
+                           idempotent_hint=True, open_world_hint=False)
 
 
 def _maybe_graph():

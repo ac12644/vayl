@@ -109,19 +109,19 @@ async def main():
 asyncio.run(main())
 ```
 
-Against a team server over streamable HTTP, pass the key through an `httpx` client (`streamable_http_client` in current `mcp` releases; older releases call it `streamablehttp_client` and take `headers=` directly):
+Against a team server over streamable HTTP, pass the key through an `httpx2` client. This is the MCP Python SDK v2 API (`mcp>=2`, which Vayl 0.8 and later use); v1 called the function `streamablehttp_client` and took `headers=` directly.
 
 ```python
 import asyncio
 
-import httpx
+import httpx2
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 async def main():
     headers = {"Authorization": "Bearer vayl_sk_..."}
-    async with httpx.AsyncClient(headers=headers, timeout=120) as http, \
-               streamable_http_client("https://memory.example.com/mcp", http_client=http) as (read, write, _), \
+    async with httpx2.AsyncClient(headers=headers, timeout=120) as http, \
+               streamable_http_client("https://memory.example.com/mcp", http_client=http) as (read, write), \
                ClientSession(read, write) as session:
         await session.initialize()
         res = await session.call_tool("license_status", {})
@@ -180,7 +180,7 @@ For the exact arguments of every tool, list them from any MCP session:
 ```python
 tools = await session.list_tools()
 for t in tools.tools:
-    print(t.name, t.inputSchema)
+    print(t.name, t.input_schema)
 ```
 
 Not every tool takes `user_id` / `agent_id` / `run_id`: principal, license, and audit-verification tools do not. The Vayl clients check this for you and only send the scope keys a tool accepts.
