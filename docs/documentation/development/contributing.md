@@ -81,15 +81,15 @@ Common prefixes are `feat`, `fix`, `perf`, `refactor`, `docs`, `ci`, `chore` and
 
 ## Contributing to the docs
 
-The docs site at [vayl.gitbook.io/vayl-docs](https://vayl.gitbook.io/vayl-docs) is edited in GitBook and synced to the `docs/` folder of the repository. Each section of the site has its own folder: `docs/documentation/` (these pages), `docs/home/`, `docs/api-reference/`, `docs/changelog/` and `docs/help-center/`, and `docs/gitbook-docs.yaml` describes the site's structure.
+The docs site at [vayl.gitbook.io/vayl-docs](https://vayl.gitbook.io/vayl-docs) is synced with the `docs/` folder on `main` through GitBook Git Sync. Each section of the site has its own folder: `docs/documentation/` (these pages), `docs/home/`, `docs/api-reference/`, `docs/changelog/` and `docs/help-center/`, and `docs/gitbook-docs.yaml` describes the site's structure.
 
-* **In GitBook.** GitBook Git Sync pushes edits to the `docs-sync` branch, because `main` is protected. A workflow then opens (or updates) a `docs-sync` → `main` pull request, so docs go through CI and review like code.
-* **By pull request.** You can also edit the Markdown under `docs/<section>/` and open a pull request against `docs-sync`, or start with a Markdown draft of a new page in a pull request.
+* **By pull request (the usual way).** Edit the Markdown under `docs/<section>/` and open a pull request against `main`, like any code change. Once it merges, GitBook imports it within about a minute.
+* **In GitBook.** Edits merged in GitBook are committed straight to `main` by the GitBook app, which is allowed past `main`'s protection for this. Use a GitBook change request if you want a review first.
 
 The API Reference pages are generated from `openapi/vayl-server.yaml` at the repository root, not from Markdown. Change the spec to change them.
 
-{% hint style="warning" %}
-Merge `docs-sync` pull requests with **Create a merge commit**, not squash or rebase. A squash leaves `docs-sync` behind `main`, and its old changes reappear in every later sync pull request.
+{% hint style="info" %}
+Links between pages inside one section use relative `.md` paths. Links into another section use its full `https://vayl.gitbook.io/vayl-docs/<section>/…` URL. Page URLs follow the groups in each section's `SUMMARY.md`, not the folder names.
 {% endhint %}
 
 In the docs, use relative links to `.md` files (for example `../reference/configuration.md`), and quote tool output only after running it.
