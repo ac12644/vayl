@@ -8,12 +8,12 @@
     "source": "github"
   },
   "websiteUrl": "https://vayl.gitbook.io/vayl-docs",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "vayl-mcp",
-      "version": "0.9.0",
+      "version": "0.9.1",
       "transport": {
         "type": "stdio"
       },

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Vayl HTTP API
-  version: 0.9.0
+  version: 0.9.1
   summary: The routes served by vayl-server, the authenticated team transport for Vayl.
   description: |
     `vayl-server` exposes Vayl's MCP tools over the Model Context Protocol's **streamable HTTP**
@@ -104,7 +104,7 @@ paths:
         '200':
           description: |
             A server-sent-events stream. Its `data:` line is the JSON-RPC response. Captured from
-            vayl-server 0.8.0.
+            vayl-server 0.9.1.
           headers:
             X-Request-ID:
               $ref: '#/components/headers/RequestId'
@@ -119,7 +119,8 @@ paths:
                     data: {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18",
                     "capabilities":{"logging":{},"prompts":{"listChanged":true},
                     "resources":{"subscribe":false,"listChanged":true},"tools":{"listChanged":true}},
-                    "serverInfo":{"name":"vayl","version":"0.8.0"}}}
+                    "serverInfo":{"name":"vayl","version":"0.9.1"},
+                    "instructions":"Vayl is persistent, reconciling memory. When the user asks you to remember, note or keep track of something, or states a fact or a change to one (a decision, a preference, a dose, an account setting, 'we switched to X'), call `remember` with one plain sentence: Vayl retires the old value instead of keeping both, which a notes file cannot do. Before answering from what you were told earlier (a project's stack, a customer's plan, a patient's current medication), call `recall`, with include_history=true for 'what was it before?'. Use `forget` when something is no longer true and has no replacement. If recall doesn't know, say so instead of guessing."}}
                 toolsCall:
                   summary: tools/call (license_status)
                   value: >-
