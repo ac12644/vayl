@@ -11,7 +11,7 @@
 [![PyPI](https://img.shields.io/pypi/v/vayl-mcp?color=346ddb&label=pypi)](https://pypi.org/project/vayl-mcp/)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/ac12644/vayl/badge)](https://scorecard.dev/viewer/?uri=github.com/ac12644/vayl)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue)
-![Python](https://img.shields.io/badge/python-3.10%2B%20%7C%203.14t-blue)
+![Python](https://img.shields.io/badge/python-3.11%2B%20%7C%203.14t-blue)
 ![Tests](https://img.shields.io/badge/tests-565%20passing-brightgreen)
 ![Protocol](https://img.shields.io/badge/protocol-MCP-black)
 [![Docs](https://img.shields.io/badge/docs-vayl.gitbook.io-346DDB)](https://vayl.gitbook.io/vayl-docs)

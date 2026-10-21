@@ -3,14 +3,24 @@
 All notable changes to Vayl are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [0.8.1] — 2026-10-22
+## [0.9.0] — 2026-10-22
 
-Packaging only: no code change.
+Drops Python 3.10 and lists Vayl in the official MCP Registry. No change to the server's tools or wire
+format.
+
+### Removed
+- **Python 3.10 is no longer supported**; Vayl requires Python 3.11 or newer. Python 3.10 reaches end
+  of life this month, and `httpx2`, the MCP SDK's HTTP client, already requires 3.11 for its current
+  releases. CI tests 3.11 and 3.12.
 
 ### Added
 - Vayl is listed in the official MCP Registry as `io.github.ac12644/vayl`. `server.json` describes
   the PyPI package, and the README carries the `mcp-name` line the registry uses to verify ownership.
 - `glama.json` names the maintainer for the Glama MCP directory.
+
+### Upgrading
+- On Python 3.11 or newer, nothing to do. On Python 3.10, pip keeps resolving 0.8.0; move to 3.11+
+  to upgrade.
 
 ## [0.8.0] — 2026-10-21
 
@@ -341,7 +351,7 @@ old, removals retract, ambiguous input is flagged, and history stays queryable �
 (`vayl-mcp`) or an authenticated team server (`vayl-server`). SQLite by default, optional Postgres;
 encryption at rest, an Ed25519-signed tamper-evident audit chain, RBAC, and GDPR tools.
 
-[0.8.1]: https://github.com/ac12644/vayl/releases/tag/v0.8.1
+[0.9.0]: https://github.com/ac12644/vayl/releases/tag/v0.9.0
 [0.8.0]: https://github.com/ac12644/vayl/releases/tag/v0.8.0
 [0.7.0]: https://github.com/ac12644/vayl/releases/tag/v0.7.0
 [0.6.0]: https://github.com/ac12644/vayl/releases/tag/v0.6.0

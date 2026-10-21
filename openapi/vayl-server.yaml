@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Vayl HTTP API
-  version: 0.8.1
+  version: 0.9.0
   summary: The routes served by vayl-server, the authenticated team transport for Vayl.
   description: |
     `vayl-server` exposes Vayl's MCP tools over the Model Context Protocol's **streamable HTTP**

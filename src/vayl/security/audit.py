@@ -73,7 +73,7 @@ class Audit:
         return anchor or GENESIS
 
     def record(self, action, user_id="", agent_id="", run_id="", detail=""):
-        ts = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+        ts = datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds")
         detail = str(detail)[:200]
         stored = self.crypter.enc(detail) if self.crypter else detail   # detail may hold personal data
         with self.db.space_lock(_AUDIT_LOCK_KEY):    # serialize read-head -> compute -> insert (cross-process)
@@ -137,7 +137,7 @@ class Audit:
         anchor that verify_chain() and new records resume from. Contiguity is required for the chain
         to stay verifiable, so everything up to the newest qualifying row is purged. Deployment-wide.
         Returns rows purged."""
-        cutoff = (datetime.datetime.now(datetime.timezone.utc)
+        cutoff = (datetime.datetime.now(datetime.UTC)
                   - datetime.timedelta(days=float(older_than_days))).isoformat(timespec="seconds")
         rows = self.db.execute(
             "SELECT seq, entry_hash FROM audit WHERE ts <= ? ORDER BY seq", (cutoff,)).fetchall()

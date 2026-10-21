@@ -11,7 +11,7 @@ This page gets you from a fresh clone to the same checks CI runs. The unit tests
 
 ## Requirements
 
-* Python 3.10, 3.11 or 3.12 (CI tests all three)
+* Python 3.11 or 3.12 (CI tests both)
 * Git
 * Docker, only for the Postgres and Neo4j integration suites
 * Node.js 18 or later, only for the TypeScript client (CI uses Node 20)
@@ -122,7 +122,7 @@ pytest tests/test_postgres.py tests/test_graph_store.py -o addopts="" -q -rs
 | Tool | Config (`pyproject.toml`) | Notes |
 | --- | --- | --- |
 | ruff | `[tool.ruff]`: line length 120, rules `E`, `F`, `W`, `I`, `B`, `UP` | `benchmarks/` and `research/` are excluded. Several purely stylistic rules (`E501`, `E701`, `E702`, `E401`, `E741`) are ignored on purpose: the codebase uses compact one-liners. |
-| mypy | `[tool.mypy]`: checks `src/vayl` for Python 3.10, with `check_untyped_defs` | `ignore_missing_imports` is on, because optional extras aren't installed everywhere. Run plain `mypy`; the file list comes from the config. |
+| mypy | `[tool.mypy]`: checks `src/vayl` for Python 3.11, with `check_untyped_defs` | `ignore_missing_imports` is on, because optional extras aren't installed everywhere. Run plain `mypy`; the file list comes from the config. |
 
 `ruff check . --fix` fixes import order and other safe issues.
 

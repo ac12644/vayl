@@ -35,13 +35,13 @@ def _artifact(signer, payload):
 
 
 def make_receipt(signer, action, scope, subject, count, chain_hash, ts=None):
-    ts = ts or datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+    ts = ts or datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds")
     return _artifact(signer, {"kind": "erasure_receipt", "action": action, "scope": scope,
                               "subject": subject, "count": count, "chain_hash": chain_hash, "ts": ts})
 
 
 def make_attestation(signer, subject, value, chain_hash, ts=None, scope=""):
-    ts = ts or datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+    ts = ts or datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds")
     # `scope` (the owning "user_id/agent_id/run_id") is part of the SIGNED body and lets the server
     # confine verify_receipt to the receipt's tenant — an attestation with no scope is unscoped.
     return _artifact(signer, {"kind": "knowledge_attestation", "subject": subject, "value": value,
@@ -132,7 +132,7 @@ class Receipts:
 
     def purge(self, older_than_days):
         """Retention (Art. 5(1)(e)): hard-delete this tenant's receipts older than N days."""
-        cutoff = (datetime.datetime.now(datetime.timezone.utc)
+        cutoff = (datetime.datetime.now(datetime.UTC)
                   - datetime.timedelta(days=float(older_than_days))).isoformat(timespec="seconds")
         cur = self.db.execute("DELETE FROM receipts WHERE ts <= ? AND tenant_id=?", (cutoff, _tenant()))
         self.db.commit()

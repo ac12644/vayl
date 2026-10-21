@@ -5,7 +5,7 @@ icon: clipboard-list
 
 # Getting started checklist
 
-1. **Install** on Python 3.10 or newer: `pip install vayl-mcp`, then `vayl-mcp --version`.
+1. **Install** on Python 3.11 or newer: `pip install vayl-mcp`, then `vayl-mcp --version`.
 2. **See it work offline:** `vayl-demo` runs the real engine on a scripted conversation with no keys or model.
 3. **Choose a model.** Set `OPENAI_API_KEY` (chat `gpt-5-mini`, embeddings `text-embedding-3-small`), or run [a local model with Ollama](how-do-i-use-a-local-model-instead-of-openai.md). If `ANTHROPIC_API_KEY` is also in your environment, set `LLM_PROVIDER=openai` too.
 4. **Connect your MCP client**, with `VAYL_DB` pointing at an absolute path in a folder that exists. For Claude Code:
