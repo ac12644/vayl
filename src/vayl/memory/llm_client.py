@@ -124,14 +124,17 @@ def _openai_config():
 
 def _openai_gen_params(model, default_max):
     """Chat-completions generation params, adapted per model family. OpenAI reasoning models
-    (gpt-5*, o-series) take `max_completion_tokens` (not `max_tokens`), allow only the default
-    temperature, and spend tokens on internal reasoning — 'minimal' keeps extraction/QA fast/cheap,
-    and the budget must cover reasoning + output. gpt-4o, local, and other OpenAI-compatible
-    endpoints keep the classic `max_tokens` + temperature. Override via OPENAI_MAX_TOKENS /
-    OPENAI_REASONING_EFFORT / OPENAI_TEMP."""
-    if model.startswith("gpt-5") or (model[:1] == "o" and model[1:2].isdigit()):
+    (gpt-5 and later, o-series) take `max_completion_tokens` (not `max_tokens`), allow only the
+    default temperature, and spend tokens on internal reasoning — the lowest effort keeps
+    extraction/QA fast/cheap ('minimal' on gpt-5/o-series, 'none' from gpt-6), and the budget must
+    cover reasoning + output. gpt-4o, local, and other OpenAI-compatible endpoints keep the classic
+    `max_tokens` + temperature. Override via OPENAI_MAX_TOKENS / OPENAI_REASONING_EFFORT / OPENAI_TEMP."""
+    major = model[4:].split(".")[0].split("-")[0] if model.startswith("gpt-") else ""
+    gpt_gen = int(major) if major.isdigit() else 0
+    if gpt_gen >= 5 or (model[:1] == "o" and model[1:2].isdigit()):
+        lowest = "none" if gpt_gen >= 6 else "minimal"
         return {"max_completion_tokens": env_int("OPENAI_MAX_TOKENS", max(default_max, 2000)),
-                "reasoning_effort": os.environ.get("OPENAI_REASONING_EFFORT", "minimal")}
+                "reasoning_effort": os.environ.get("OPENAI_REASONING_EFFORT", lowest)}
     return {"max_tokens": env_int("OPENAI_MAX_TOKENS", default_max),
             "temperature": env_float("OPENAI_TEMP", 0.0)}
 

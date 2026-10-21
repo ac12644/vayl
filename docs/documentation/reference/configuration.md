@@ -62,7 +62,7 @@ Vayl calls a chat model to extract and reconcile facts and to answer recalls, an
 | `OPENAI_MODEL` | `qwen2.5:3b` when the base URL contains `localhost` or `127.0.0.1`, else `gpt-5-mini` | Extraction model (and answer model unless `VAYL_READ_MODEL` is set). |
 | `OPENAI_MAX_TOKENS` | `400` for extraction, `300` for answers; `2000` for `gpt-5*` and `o<digit>*` models | Output token cap. Sent as `max_completion_tokens` to reasoning models and `max_tokens` to everything else. |
 | `OPENAI_TEMP` | `0.0` | Temperature. Not sent to reasoning models, which only allow their default. |
-| `OPENAI_REASONING_EFFORT` | `minimal` | `reasoning_effort` for `gpt-5*` and `o<digit>*` models only. |
+| `OPENAI_REASONING_EFFORT` | `minimal` (`none` from gpt-6) | `reasoning_effort` for `gpt-5` and later and `o<digit>*` models only. |
 | `OPENAI_JSON` | `on` | Request JSON mode (`response_format: json_object`) for extraction. Set `off` for a model or server that rejects it. |
 | `OPENAI_SYSTEM_PREFIX` | empty | Text prepended to every system prompt, for example `/no_think` for a reasoning model you want to answer directly. Also applies to answers on the Anthropic and Groq paths. |
 
