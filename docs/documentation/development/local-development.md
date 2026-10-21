@@ -183,10 +183,10 @@ vayl/
 ├── docs/               The docs site, synced with GitBook: one folder per section (documentation/, home/,
 │                       api-reference/, changelog/, help-center/) plus gitbook-docs.yaml
 ├── openapi/            vayl-server.yaml, the OpenAPI spec behind the API Reference
-└── .github/workflows/  CI (unit + integration), TS SDK CI, CodeQL, Scorecard, docs-sync, release, npm publish
+└── .github/workflows/  CI (unit + integration), TS SDK CI, CodeQL, Scorecard, release, npm publish
 ```
 
-`docs/` is kept in sync with GitBook through the `docs-sync` branch. Edit docs in GitBook or open a pull request; see [Contributing](contributing.md#contributing-to-the-docs).
+`docs/` on `main` is kept in sync with GitBook. Edit it with a normal pull request, or in GitBook; see [Contributing](contributing.md#contributing-to-the-docs).
 
 ## Next steps
 
