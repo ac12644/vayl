@@ -22,6 +22,7 @@ import secrets
 import sys
 import time
 import traceback
+import urllib.error
 
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -110,7 +111,18 @@ def _transport_security():
     }
 
 
-mcp = FastMCP("vayl", version=__version__)   # serverInfo.version; FastMCP's own otherwise
+# Sent to the client at initialize; Claude Code and others show it to the model. Without it a model
+# told "remember X for this project" wrote X to a notes file and never called Vayl.
+_INSTRUCTIONS = (
+    "Vayl is persistent, reconciling memory. When the user asks you to remember, note or keep track "
+    "of something, or states a fact or a change to one (a decision, a preference, a dose, an "
+    "account setting, 'we switched to X'), call `remember` with one plain sentence: Vayl retires the "
+    "old value instead of keeping both, which a notes file cannot do. Before answering from what you "
+    "were told earlier (a project's stack, a customer's plan, a patient's current medication), call "
+    "`recall`, with include_history=true for 'what was it before?'. Use `forget` when something is "
+    "no longer true and has no replacement. If recall doesn't know, say so instead of guessing."
+)
+mcp = FastMCP("vayl", version=__version__, instructions=_INSTRUCTIONS)   # serverInfo.version; FastMCP's own otherwise
 _db_path = os.path.expanduser(os.environ.get("VAYL_DB", "vayl.db"))
 _store = Store(_db_path, graph=_maybe_graph())
 _metrics = Metrics(_store.db, _store.crypter)
@@ -248,6 +260,9 @@ def _guard(tool, fn, cap=None, space=None):
         where = f" at {os.path.basename(tb[-1].filename)}:{tb[-1].lineno} in {tb[-1].name}" if tb else ""
         log.error("[vayl %s] %s: %s%s", ref, tool, type(e).__name__, where)
         log.debug("[vayl %s] %s: full detail", ref, tool, exc_info=True)
+        if isinstance(e, urllib.error.HTTPError):   # the status code carries no data; the text might
+            return (f"Vayl couldn't complete that (ref {ref}): the model provider rejected the request "
+                    f"(HTTP {e.code}). Run the `health` tool to see the provider's reason.")
         return (f"Vayl couldn't complete that (ref {ref}). Retry if it was a transient blip; "
                 "otherwise the full detail is in the server logs under that reference.")
     finally:
@@ -1067,12 +1082,12 @@ def health() -> str:
         with llm_client.single_attempt():
             try:
                 _embed(["ping"]); report.append("embedder: ok")
-            except Exception as e:
-                report.append(f"embedder: FAIL ({type(e).__name__})")
+            except Exception as e:   # fixed probe text, so the provider's reason carries no user data
+                report.append(f"embedder: FAIL ({llm_client.http_error_reason(e) or type(e).__name__})")
             try:
                 llm_extract_classify("health check", []); report.append("llm: ok")
             except Exception as e:
-                report.append(f"llm: FAIL ({type(e).__name__})")
+                report.append(f"llm: FAIL ({llm_client.http_error_reason(e) or type(e).__name__})")
         if _store.graph:
             try:
                 _store.graph.all_edges(limit=1); report.append("graph: ok")

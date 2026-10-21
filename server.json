@@ -2,18 +2,18 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.ac12644/vayl",
   "title": "Vayl",
-  "description": "Reconciling memory for coding agents: a changed decision retires the old one, with history kept.",
+  "description": "Reconciling memory for AI agents: a changed fact retires the old value, with history and approval.",
   "repository": {
     "url": "https://github.com/ac12644/vayl",
     "source": "github"
   },
   "websiteUrl": "https://vayl.gitbook.io/vayl-docs",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "vayl-mcp",
-      "version": "0.9.0",
+      "version": "0.9.1",
       "transport": {
         "type": "stdio"
       },

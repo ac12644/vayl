@@ -179,6 +179,23 @@ def test_health_reports_each_dependency():
         assert part in report
 
 
+def _provider_400(*_a, **_k):
+    import io
+    import urllib.error
+    body = b'{"error": {"message": "Unsupported value: temperature 0 is not supported with this model."}}'
+    raise urllib.error.HTTPError("https://api.openai.com/v1/chat/completions", 400, "Bad Request", {}, io.BytesIO(body))
+
+
+def test_a_rejected_model_call_explains_itself(uid, monkeypatch):
+    """A live gpt-6 run failed every call with only 'llm: FAIL (HTTPError)' and an opaque ref. health
+    sends a fixed probe, so it can show the provider's reason; tools only name the HTTP status."""
+    monkeypatch.setattr(llm_memory, "llm_extract_classify", _provider_400)
+    assert "llm: FAIL (HTTP 400: Unsupported value: temperature 0" in s.health()
+    out = s.remember("We use Redux for state.", user_id=uid)
+    assert "rejected the request (HTTP 400)" in out and "health" in out
+    assert "temperature" not in out          # provider text can echo the request, so tools never show it
+
+
 def test_skip_is_not_reported_as_stored(uid):
     out = s.remember("If we used Vue it would be faster.", user_id=uid)
     assert "Stored" not in out and out.startswith("Not stored") and "framework = Vue" in out
@@ -209,3 +226,11 @@ def test_deleting_nothing_issues_no_receipt(uid):
 def test_server_reports_vayls_version():
     import vayl
     assert s.mcp.version == vayl.__version__
+
+
+def test_the_server_tells_clients_when_to_use_memory():
+    """Without server instructions, Claude Code asked to 'remember X for this project' wrote a notes
+    file and never called Vayl. The instructions name the tools and the situations."""
+    text = s.mcp.instructions or ""
+    for word in ("`remember`", "`recall`", "`forget`", "include_history"):
+        assert word in text

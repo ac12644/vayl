@@ -7,7 +7,7 @@ icon: terminal
 
 # Claude Code
 
-Add Vayl to Claude Code and the agent keeps your project's decisions current across sessions: when you switch from Redux to Zustand, the old answer is retired instead of sitting next to the new one. You register Vayl as an MCP server with `claude mcp add`, then tell the agent when to use it in `CLAUDE.md`.
+Add Vayl to Claude Code and the agent keeps your project's decisions current across sessions: when you switch from Redux to Zustand, the old answer is retired instead of sitting next to the new one. You register Vayl as an MCP server with `claude mcp add`. Vayl tells the agent when to use its tools, and a `CLAUDE.md` rule is optional.
 
 Two setups:
 
@@ -130,7 +130,7 @@ Add `-e VAYL_CRITICAL_CATEGORIES=guardrail` to put every stored convention into 
 
 ## Tell Claude Code when to use memory
 
-Claude Code decides when to call MCP tools. Installing the server does not make it remember or recall on its own, so add a short instruction to your project's `CLAUDE.md`.
+Vayl sends MCP server instructions when Claude Code connects. They tell the model to call `remember` when you state or change a decision and `recall` before answering questions about the project, so "Remember for this project: our database is Postgres" goes to Vayl without naming it. To make the rules explicit for your team, or to change them, add a short instruction to your project's `CLAUDE.md`.
 
 {% hint style="info" %}
 This is a suggested starting point, not a required format. Adjust it to how your team works.

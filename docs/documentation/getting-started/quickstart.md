@@ -29,7 +29,7 @@ vayl-mcp --version
 ```
 
 ```
-vayl-mcp 0.9.0
+vayl-mcp 0.9.1
 ```
 
 Optional extras:
@@ -155,28 +155,28 @@ The database file gets two companions, `vayl.db.key` (at-rest encryption key) an
 
 Tell your agent:
 
-> **You:** Remember that we use Redux for state management.
+> **You:** Remember that Acme Corp is on the Enterprise plan.
 >
-> **You:** Actually, we switched to Zustand.
+> **You:** Acme downgraded to the Pro plan this morning.
 >
-> **You:** What do we use for state?
+> **You:** What plan is Acme on?
 
 Behind these turns, the agent calls `remember` twice and `recall` once. The `remember` returns are deterministic:
 
 ```
-Stored: [ADD] state = Redux
-Stored: [SUPERSEDE] state = Zustand
+Stored: [ADD] acme_corp_plan = Enterprise
+Stored: [SUPERSEDE] acme_corp_plan = Pro
 ```
 
-The model chose the subject name `state`; yours may differ. A message with nothing durable in it returns `No durable fact found (looked like chatter or a question).`
+The model chose the subject name `acme_corp_plan`; yours may differ, and a [preset](../core-concepts/core-concepts.md#declared-slots-and-presets) fixes it. A message with nothing durable in it returns `No durable fact found (looked like chatter or a question).`
 
 `recall` returns an answer written by the model from the active facts, for example:
 
 ```
-We use Zustand for state management.
+Acme is on the Pro plan.
 ```
 
-The wording varies. What does not vary is that Redux is no longer an active fact, so it cannot be returned as current. Ask _"what did we use before?"_ and the agent can call `recall` with `include_history=True`, or `history`, to reach Redux.
+The wording varies. What does not vary is that Enterprise is no longer an active fact, so it cannot be returned as current. Ask _"what plan was Acme on before?"_ and the agent can call `recall` with `include_history=True`, or `history`, to reach Enterprise.
 {% endstep %}
 
 {% step %}
@@ -194,7 +194,7 @@ llm: ok
 graph: disabled
 ```
 
-A failing dependency shows as `FAIL` with only the error type, such as `embedder: FAIL (NewConnectionError)` when nothing is listening at the embedder URL (the exact type depends on your HTTP stack; details go to the server log). `model=(default)` means `OPENAI_MODEL` is unset and the default above applies.
+A failing dependency shows as `FAIL` with the reason. When the API answers with an error, that's its status and message, such as `llm: FAIL (HTTP 401: Incorrect API key provided …)`; when it can't be reached, it's the error type, such as `embedder: FAIL (NewConnectionError)` when nothing is listening at the embedder URL (the exact type depends on your HTTP stack). `model=(default)` means `OPENAI_MODEL` is unset and the default above applies.
 {% endstep %}
 {% endstepper %}
 

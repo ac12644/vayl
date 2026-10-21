@@ -11,9 +11,9 @@ Add Vayl to an agent you already build with a framework, and its memory stops go
 Because Vayl reconciles, the agent is never handed a fact and its replacement as if both were current:
 
 ```
-"We use Redux."                           → stored
-"Actually we moved off Redux to Zustand." → Redux retired, Zustand active
-recall("what do we use?")                 → an answer built from Zustand only
+"Acme Corp is on the Enterprise plan, account active."            → account_status = active
+"Acme's invoice bounced. Account suspended until payment clears." → active retired, suspended current
+recall("Is Acme's account in good standing?")                     → an answer built from "suspended" only
 ```
 
 A plain vector store would return both. Vayl keeps the old value in `history` instead. `recall` answers are written by the model, so the exact wording varies.
@@ -61,7 +61,7 @@ from vayl.integrations.langgraph import VaylMemory
 
 with VaylMemory(user_id="proj_7") as mem:
     agent = mem.agent("openai:gpt-4o-mini")      # a ready agent with the memory tools and a memory-aware prompt
-    result = agent.invoke({"messages": [("user", "We moved off Redux to Zustand. What do we use now?")]})
+    result = agent.invoke({"messages": [("user", "Acme's payment cleared, the account is active again. Can I renew their licenses?")]})
     print(result["messages"][-1].content)
 ```
 
@@ -88,7 +88,7 @@ from vayl.integrations.openai_agents import VaylMemory
 
 with VaylMemory(user_id="proj_7") as mem:
     agent = mem.agent(model="gpt-4o")      # or: Agent(name=..., tools=mem.tools())
-    result = Runner.run_sync(agent, "We moved off Redux to Zustand. What do we use now?")
+    result = Runner.run_sync(agent, "Acme's payment cleared, the account is active again. Can I renew their licenses?")
     print(result.final_output)
 ```
 
@@ -147,7 +147,7 @@ const { text } = await generateText({
   model: openai("gpt-4o"),
   tools: vaylTools(m),
   stopWhen: stepCountIs(5),
-  prompt: "We moved off Redux to Zustand. What do we use now?",
+  prompt: "Acme's payment cleared, the account is active again. Can I renew their licenses?",
 });
 console.log(text);
 await m.close();

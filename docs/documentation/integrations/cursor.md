@@ -93,6 +93,12 @@ Restart Cursor after changing `mcp.json`. In Cursor's MCP settings, `vayl` shoul
 {% step %}
 ### Tell Cursor when to use memory
 
+Vayl sends MCP server instructions that say when to call `remember` and `recall`. Claude Code passes them to its model; a project rule makes the same behaviour explicit in Cursor.
+
+{% hint style="info" %}
+**Needs verification:** whether Cursor shows MCP server instructions to its model. The rule below works either way.
+{% endhint %}
+
 Create `<project>/.cursor/rules/vayl.mdc`:
 
 ```markdown

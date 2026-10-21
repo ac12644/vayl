@@ -13,7 +13,7 @@ icon: code
 
 In a chat client (Claude Desktop, Cursor, Claude Code) or an agent framework you configure Vayl once (see the [Quickstart](quickstart.md)), and the model calls `remember`, `recall`, and the rest from the tool descriptions Vayl advertises.
 
-> **You:** Remember we switched to Zustand.
+> **You:** Remember that Acme's account is suspended until their payment clears.
 
 The client sends an MCP tool call like this, with arguments filled in by the model:
 
@@ -22,7 +22,7 @@ The client sends an MCP tool call like this, with arguments filled in by the mod
   "method": "tools/call",
   "params": {
     "name": "remember",
-    "arguments": { "text": "We switched to Zustand", "user_id": "proj_7" }
+    "arguments": { "text": "Acme's account is suspended until their payment clears", "user_id": "cust_5521" }
   }
 }
 ```

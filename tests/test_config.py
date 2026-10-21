@@ -125,3 +125,17 @@ def test_bad_log_level_and_oidc_role_map_name_their_variable(monkeypatch):
         monkeypatch.setenv("VAYL_OIDC_ROLE_MAP", bad)
         with pytest.raises(ValueError, match="VAYL_OIDC_ROLE_MAP must be a JSON object"):
             sso.configured()
+
+
+def test_openai_params_follow_the_model_family(monkeypatch):
+    # gpt-6 rejects temperature=0, max_tokens and reasoning_effort='minimal'; a live Claude Code run
+    # with gpt-6-luna failed every model call before this.
+    from vayl.memory.llm_client import _openai_gen_params
+    for v in ("OPENAI_MAX_TOKENS", "OPENAI_REASONING_EFFORT", "OPENAI_TEMP"):
+        monkeypatch.delenv(v, raising=False)
+    assert _openai_gen_params("gpt-6-luna", 400) == {"max_completion_tokens": 2000, "reasoning_effort": "none"}
+    assert _openai_gen_params("gpt-6.1-sol", 400)["reasoning_effort"] == "none"
+    assert _openai_gen_params("gpt-5-mini", 400)["reasoning_effort"] == "minimal"
+    assert _openai_gen_params("o3", 400)["reasoning_effort"] == "minimal"
+    assert _openai_gen_params("gpt-4o", 400) == {"max_tokens": 400, "temperature": 0.0}
+    assert _openai_gen_params("qwen2.5:3b", 300) == {"max_tokens": 300, "temperature": 0.0}

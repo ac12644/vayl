@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vayl-mcp"
-version = "0.9.0"
-description = "Vayl — the reconciling memory layer for AI agents, over MCP. Remembers what's true now, forgets correctly."
+version = "0.9.1"
+description = "The reconciling memory layer for AI agents, over MCP: when a fact changes, the old value is retired and kept in history."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }

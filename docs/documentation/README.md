@@ -17,17 +17,29 @@ icon: hand-wave
 
 ## See it in one example
 
-Vayl turns a conversation into facts and keeps only what is true now, while preserving the history.
+Vayl turns a conversation into facts and keeps only what is true now, while preserving the history. Here a care assistant records a fictional patient's anticoagulant, then a switch to another one. Medications are confirm-required in the clinical preset, so the switch waits for a clinician.
 
 ```
-"We use Redux."                            → remembered        (state = Redux)
-"Actually we moved off Redux to Zustand."  → Redux superseded  (state = Zustand)
-"What do we use?"                          → "Zustand"         not "Redux, Zustand"
-"What did we use first?"                   → "Redux"           answered from history
+remember("Patient is on warfarin 5 mg daily for atrial fibrillation.")
+  Stored: [ADD] active_medication = warfarin 5 mg daily; [ADD] primary_diagnosis = atrial fibrillation
+remember("Allergic to penicillin, causes hives.")
+  Stored: [ADD] allergy = penicillin, causes hives
+remember("Warfarin stopped today. Started apixaban 5 mg twice daily.")
+  Stored: [FLAG] active_medication = apixaban 5 mg twice daily; …
+
+confirm_change(4, decided_by="Dr. Okafor, verified with pharmacy")
+  Approved #4: SUPERSEDE active_medication = apixaban 5 mg twice daily
+
+recall("What anticoagulant is the patient on?")
+  The patient is on apixaban 5 mg twice daily.
+recall("What anticoagulant was the patient on before?", include_history=True)
+  The patient was previously on warfarin 5 mg daily.
+recall("Can we give amoxicillin?")
+  No—amoxicillin is a penicillin, and the patient has a penicillin allergy that causes hives.
 ```
 
 {% hint style="info" %}
-**This sketch is illustrative.** The store side is deterministic: after the second message the only active value for `state` is `Zustand`. The quoted answers are written by the LLM you configure, so the wording varies. To see the real engine output with no keys, run `vayl-demo` (see the [Quickstart](getting-started/quickstart.md)).
+**Captured from a real run** with `gpt-6-luna`, `VAYL_SLOT_SCHEMA=preset:clinical` and `VAYL_CRITICAL_CATEGORIES=critical`. The `Stored:` and `Approved` lines are Vayl's own output. The `recall` answers are written by the model, so their wording varies. The allergy reaches the last answer because critical facts go into every answer. The whole flow is in [Tutorial: a hospital medication assistant](guides/tutorial-a-hospital-medication-assistant.md).
 {% endhint %}
 
 Why this matters, and how it differs from memory that only appends: [Why Vayl](why-vayl/README.md).

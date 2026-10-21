@@ -70,7 +70,7 @@ llm: ok
 graph: disabled
 ```
 
-`embedder: FAIL (NewConnectionError)` or `llm: FAIL (…)` means Ollama isn't running or isn't reachable at that address. `FAIL (HTTPError)` on either line usually means that model isn't pulled.
+`embedder: FAIL (NewConnectionError)` or `llm: FAIL (…)` means Ollama isn't running or isn't reachable at that address. `FAIL (HTTP 404: …)` on either line usually means that model isn't pulled; the message names it.
 {% endstep %}
 {% endstepper %}
 

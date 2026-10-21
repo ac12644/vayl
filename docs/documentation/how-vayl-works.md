@@ -11,7 +11,7 @@ Vayl answers "what is true now?" by reconciling each new fact against what it al
 
 ## The problem: memory that goes stale
 
-Additive memory saves every fact and retrieves by similarity. That works until a fact changes. Tell an additive store you moved from Redux to Zustand, then ask what you use, and it can return **Redux**: the old fact is still stored and still matches the query. The model has to guess which remembered value is current, and when it guesses wrong the answer still reads as confident.
+Additive memory saves every fact and retrieves by similarity. That works until a fact changes. Tell an additive store that a customer's account was suspended, then ask whether it is in good standing, and it can return **active**: the old fact is still stored and still matches the query. The model has to guess which remembered value is current, and when it guesses wrong the answer still reads as confident.
 
 Vayl reconciles on write instead. A new value supersedes the old one, a removal retracts it, an ambiguous or unsafe change is flagged for a person, and a past-tense statement is archived as history instead of becoming current. The full model is in [Reconciliation](core-concepts/core-concepts.md).
 
@@ -126,7 +126,7 @@ sequenceDiagram
     participant L as LLM
     participant M as Embedder
 
-    Note over C,M: remember("We moved from Redux to Zustand")
+    Note over C,M: remember("Acme's invoice bounced. Account suspended until payment clears.")
     C->>G: remember(text, user_id, …)
     G->>G: auth · write capability · scope
     G->>S: load(space): ACTIVE + FLAGGED_CONFLICT only
@@ -144,9 +144,9 @@ sequenceDiagram
     E->>S: save(): insert new rows, update changed ones
     S->>M: embed new facts (1 batched call)
     G->>G: audit record + metrics
-    G-->>C: "Stored: [SUPERSEDE] state = Zustand"
+    G-->>C: "Stored: … [SUPERSEDE] account_status = suspended …"
 
-    Note over C,M: recall("what state library do we use?")
+    Note over C,M: recall("Is Acme's account in good standing?")
     C->>G: recall(question, user_id, …)
     G->>S: load(space): ACTIVE + FLAGGED_CONFLICT only
     opt more than VAYL_RECALL_CONTEXT facts
@@ -155,7 +155,7 @@ sequenceDiagram
     end
     E->>L: answer from ACTIVE facts (1 call)
     L-->>E: free-text answer
-    G-->>C: "You use Zustand." (model-written)
+    G-->>C: "No. Acme's account is suspended until payment clears." (model-written)
 ```
 
 The subject name (`state` above) is chosen by the extraction model unless a [declared slot](core-concepts/core-concepts.md#declared-slots-and-presets) fixes it.

@@ -307,6 +307,22 @@ Vayl couldn't complete that (ref cc052fb0). Retry if it was a transient blip; ot
   On `vayl-server`, the bracketed value before it is the request ID (`-` on stdio). Search for that ID to see everything the request did, including the access line. For the exception text, reproduce with `VAYL_LOG_LEVEL=DEBUG`, and treat that log as sensitive. An admin can also read the recent error text with `stats`.
 * **Verification:** a retry returns a normal result, or the log names the cause to fix. `CriticalOverflow` is covered below.
 
+### `the model provider rejected the request (HTTP …)`
+
+```
+Vayl couldn't complete that (ref 6d1652a3): the model provider rejected the request (HTTP 400). Run the `health` tool to see the provider's reason.
+```
+
+* **Cause:** the LLM or embedding API refused Vayl's request: a wrong key (`401`), a model the key can't use (`404`), a parameter the model doesn't accept (`400`), or a quota limit (`429`). The tool result shows only the status, because the provider's message can quote the request.
+* **Solution:** run `health`. Its probe sends no memory content, so it prints the provider's reason:
+
+  ```
+  llm: FAIL (HTTP 400: Unsupported value: 'reasoning_effort' does not support 'minimal' with this model. Supported values are: 'none', 'low', 'medium', 'high', and 'xhigh'.)
+  ```
+
+  Fix the key, the model name or the setting it names, then restart the server.
+* **Verification:** `health` reports `llm: ok` and `embedder: ok`.
+
 ### `CriticalOverflow` in the log
 
 * **Cause:** a recall found more facts in critical categories than `VAYL_CRITICAL_BUDGET` (200 by default). Vayl fails the read instead of silently dropping some of them.
