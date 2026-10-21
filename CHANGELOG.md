@@ -15,6 +15,11 @@ All notable changes to Vayl are documented here. This project adheres to
 - Pinned GitHub Actions updated to their latest releases, including CodeQL `v3` → `v4`.
 
 ### Fixed
+- **The Python client shuts down completely.** `close()` used to stop its event loop without waiting
+  for the session to close, and never joined its thread. A failed connection didn't clean up at all,
+  leaving a running loop thread with half-open connections. On Python 3.10 (Linux) this crashed the
+  interpreter at exit. `close()` now waits for the session, stops the loop and joins the thread, and a
+  failed connection cleans up before raising.
 - A failed client connection now raises one readable `VaylError` that names the target and the root
   cause, instead of a nested `ExceptionGroup` ("unhandled errors in a TaskGroup").
 - The client reads `CallToolResult.is_error` directly. It used `getattr(result, "isError", False)`,
