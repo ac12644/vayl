@@ -23,7 +23,7 @@ This page gets you from a fresh clone to the same checks CI runs. The unit tests
 ### Clone and create a virtual environment
 
 ```bash
-git clone https://github.com/vayl-dev/vayl && cd vayl
+git clone https://github.com/ac12644/vayl && cd vayl
 python -m venv .venv && source .venv/bin/activate
 ```
 

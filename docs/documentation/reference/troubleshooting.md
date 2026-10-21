@@ -339,7 +339,7 @@ A broken chain means rows were edited, reordered or deleted outside Vayl. Restor
 
 ## Still stuck?
 
-Open an issue at [github.com/vayl-dev/vayl](https://github.com/vayl-dev/vayl/issues) with the `health` output and the relevant log lines (at `WARNING` or `INFO`, not `DEBUG`).
+Open an issue at [github.com/ac12644/vayl](https://github.com/ac12644/vayl/issues) with the `health` output and the relevant log lines (at `WARNING` or `INFO`, not `DEBUG`).
 
 ## Next steps
 

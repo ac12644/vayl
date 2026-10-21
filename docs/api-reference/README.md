@@ -38,5 +38,5 @@ curl -s -X POST http://127.0.0.1:8080/mcp \
 The response is a server-sent-events stream; its `data:` line holds the JSON-RPC result.
 
 {% hint style="info" %}
-This reference is generated from [`openapi/vayl-server.yaml`](https://github.com/vayl-dev/vayl/blob/main/openapi/vayl-server.yaml) in the repository, which a test keeps in step with the server's routes.
+This reference is generated from [`openapi/vayl-server.yaml`](https://github.com/ac12644/vayl/blob/main/openapi/vayl-server.yaml) in the repository, which a test keeps in step with the server's routes.
 {% endhint %}
