@@ -25,6 +25,7 @@ def step(label, call):
 def main():
     env = dict(os.environ, VAYL_DB=os.path.join(tempfile.mkdtemp(), "demo.db"),
                VAYL_SLOT_SCHEMA="preset:clinical", VAYL_CRITICAL_CATEGORIES="critical",
+               VAYL_CONFIRM_MODE="review",   # the demo shows the approval step; the preset default is "auto"
                VAYL_LOG_LEVEL="ERROR", FASTMCP_LOG_LEVEL="ERROR")
     print(f"{DIM}# fictional patient · clinical preset · model {env.get('OPENAI_MODEL', 'default')}{RESET}\n")
     with Vayl(env=env, user_id="pt_4471") as m:

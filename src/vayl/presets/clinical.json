@@ -1,5 +1,5 @@
 {
-  "_note": "Built-in clinical preset. Enable with VAYL_SLOT_SCHEMA=preset:clinical and VAYL_CRITICAL_CATEGORIES=critical so allergies/meds are always injected. Meds and code status are confirm-gated (a change needs human approval); allergies are NOT gated because surfacing a new allergy is safety-positive and must be immediate.",
+  "_note": "Built-in clinical preset. Enable with VAYL_SLOT_SCHEMA=preset:clinical and VAYL_CRITICAL_CATEGORIES=critical so allergies/meds are always injected. Medications are confirm \"auto\": a clear start, stop, switch or dose change applies at once (marked auto-applied in history), and only an uncertain one (hedged, negated, future-tense, low confidence, or one that would leave two anticoagulants active) waits for approval. Code status is \"review\": every change waits for a clinician. Allergies are not gated: surfacing a new allergy is safety-positive and must be immediate. Set VAYL_CONFIRM_MODE=review to require approval for every medication change.",
   "slots": [
     {
       "name": "allergy",
@@ -16,7 +16,7 @@
       "category": "critical",
       "verbatim": true,
       "multi": true,
-      "confirm": true,
+      "confirm": "auto",
       "aliases": ["current_medication", "medication", "prescribed_medication", "meds"]
     },
     {

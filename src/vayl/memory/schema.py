@@ -27,8 +27,12 @@ Declaring a slot also carries two properties the rest of the system reads:
     verbatim  — the value must be stored exactly as stated. Normalization is lossy by design
                 ("500mg twice daily" -> "twice_daily" loses the dose), which is fine for
                 `favourite_colour` and unacceptable for a prescription.
-    confirm   — replacing or removing a value in this slot is PROPOSED, not applied. The current
-                value stands until a human approves. Reconciliation is driven by an LLM reading
+    confirm   — changes to this slot are gated. `true` or "review": replacing, removing or adding to
+                a value is PROPOSED, not applied, and the current value stands until a human
+                approves. "auto": a clear change applies at once and is marked as auto-applied;
+                only an uncertain one (hedged, negated, future-tense, low confidence, or one that
+                would leave two anticoagulants active) is proposed. VAYL_CONFIRM_MODE overrides
+                the mode for every gated slot. Reconciliation is driven by an LLM reading
                 conversational text, and "stop the warfarin" appearing in a sentence is not the
                 same as an order to stop it. For most slots being wrong is recoverable; for some
                 the write itself is the hazard, and those need a person in the loop.
@@ -78,7 +82,8 @@ class SlotSpec:
     description: str = ""
     category: str = ""          # tags facts in this slot; feeds the critical-fact channel
     verbatim: bool = False      # store the value exactly as stated — no normalization
-    confirm: bool = False       # a human must approve replacing or removing a value here
+    confirm: bool = False       # changes to this slot are gated (see confirm_mode)
+    confirm_mode: str = ""      # "review" (a person approves every change) or "auto" (clear changes apply)
     multi: bool = False         # holds MANY concurrent values (an allergy list, a med list)
     aliases: list = field(default_factory=list)
 
@@ -157,6 +162,18 @@ class SlotSchema:
 
 # ── loading ──────────────────────────────────────────────────────────────────
 
+def _confirm(value, slot):
+    """`confirm` as a mode: "" (no gate), "review" or "auto". `true` means review, so a schema that
+    predates the modes keeps its meaning. Anything else is a schema error, not a silent default."""
+    if value in (False, None, "", "off", "false"):
+        return ""
+    if value is True or value in ("review", "true"):
+        return "review"
+    if value == "auto":
+        return "auto"
+    raise ValueError(f"slot {slot!r}: confirm must be true, false, \"review\" or \"auto\", not {value!r}")
+
+
 def from_dict(obj):
     slots = []
     for raw in (obj or {}).get("slots", []):
@@ -168,7 +185,8 @@ def from_dict(obj):
             description=str(raw.get("description") or ""),
             category=str(raw.get("category") or ""),
             verbatim=bool(raw.get("verbatim", False)),
-            confirm=bool(raw.get("confirm", False)),
+            confirm=_confirm(raw.get("confirm", False), name) != "",
+            confirm_mode=_confirm(raw.get("confirm", False), name),
             multi=bool(raw.get("multi", False)),
             aliases=[str(a) for a in (raw.get("aliases") or [])],
         ))

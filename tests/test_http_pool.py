@@ -110,3 +110,30 @@ def test_health_reports_an_unreachable_endpoint_without_backoff(monkeypatch):
         report = mcp_server.health()
     assert "embedder: FAIL (URLError)" in report and "llm: FAIL (URLError)" in report
     assert urlopen.call_count == 2 and sleep.call_count == 0   # one attempt each, no backoff
+
+
+def test_an_exhausted_quota_fails_at_once_instead_of_retrying(monkeypatch):
+    """OpenAI answers 'no credits remaining' with HTTP 429, the code it uses for rate limits. Retrying
+    it with backoff made each call hang for minutes; it is permanent, so it fails on the first try."""
+    import urllib.error
+    import urllib.request
+
+    from vayl.memory import llm_client
+    calls = []
+    body = b'{"error": {"type": "insufficient_quota", "code": "credit_balance_exhausted", "message": "You have no credits remaining."}}'
+
+    class _Resp:
+        status, data, headers = 429, body, {}
+
+    class _Pool:
+        def request(self, *a, **k):
+            calls.append(1); return _Resp()
+
+    monkeypatch.setattr(llm_client, "_POOL", _Pool())
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: (_ for _ in ()).throw(AssertionError("retried")))
+    req = urllib.request.Request("https://api.openai.com/v1/chat/completions", data=b"{}")
+    try:
+        llm_client._http_json(req, 5)
+    except urllib.error.HTTPError as e:
+        assert e.code == 429 and "no credits remaining" in llm_client.http_error_reason(e)
+    assert calls == [1]

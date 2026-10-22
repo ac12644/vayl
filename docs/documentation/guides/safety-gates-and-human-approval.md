@@ -9,7 +9,7 @@ icon: gear
 
 Reconciliation keeps memory current. For agents where a wrong action is costly (clinical, financial, legal), Vayl adds five guardrails on top: an action gate, a human approval queue, trusted sources for authorized feeds, a critical-fact channel, and declared slots that tie them together.
 
-The examples use a clinical space, `user_id="patient_42"`, with the built-in `preset:clinical` schema. Outputs are real tool output; subject names under your own schema will be the ones you declare.
+The examples use a clinical space, `user_id="patient_42"`, with the built-in `preset:clinical` schema and `VAYL_CONFIRM_MODE=review`, so every medication change is queued and you can see the approval flow. Outputs are real tool output; subject names under your own schema will be the ones you declare.
 
 ## Gate an action on the facts behind it
 
@@ -59,7 +59,7 @@ When it does answer, the answer is written by the model, like any recall. Use `s
 
 ## Require a person to approve risky changes
 
-Some writes are themselves the hazard: "we should probably stop the warfarin" in a note is not an order to stop it. A slot declared with `confirm: true` doesn't apply a replacement or removal. It records a **proposal**, leaves the current value standing, and waits for a person:
+Some writes are themselves the hazard: "we should probably stop the warfarin" in a note is not an order to stop it. A slot declared with `confirm: true` doesn't apply a replacement, a removal, or a new item added to a slot that already holds one (a second medication). It records a **proposal**, leaves the current value standing, and waits for a person:
 
 ```python
 remember(text="Increase warfarin to 7 mg PO daily", user_id="patient_42")
@@ -86,6 +86,29 @@ reject_change(memory_id=4, user_id="patient_42")
 # Discarded #4. The current value is unchanged.
 ```
 
+### Automatic or reviewed
+
+A gated slot has a mode, set with `"confirm"` in the schema:
+
+| `confirm` | What happens to a change |
+| --- | --- |
+| `"auto"` | A clear change applies at once and is marked `auto_applied` in history. Only an uncertain one waits in the queue. |
+| `"review"` or `true` | Every change waits for a person. |
+| `false` | No gate. |
+
+In the clinical preset, `active_medication` is `"auto"` and `code_status` is `"review"`. `VAYL_CONFIRM_MODE=review` (or `auto`) overrides the mode for every gated slot, for a deployment whose policy requires sign-off on everything.
+
+In `"auto"` mode a change waits for a person instead of applying when any of these holds:
+
+* the sentence hedges or negates ("probably stop it if …", "do not stop the warfarin", "don't switch her yet");
+* it is an order for later ("start apixaban tomorrow");
+* the model's confidence is below the auto-apply threshold;
+* the model aimed it at a gated fact under a different subject, or returned an action Vayl had to guess;
+* the stop was found only by Vayl's sentence check, not extracted by the model;
+* applying it would leave two anticoagulants active, for example a switch whose stop the model missed. The new drug is then queued with its stop, so a switch applies whole or not at all.
+
+Everything applied automatically stays in history and in the audit log, so a reviewer can check or reverse it later.
+
 ### Who can approve
 
 `confirm_change` and `reject_change` need the **`approve`** capability, which only the `admin` and `member` roles have (0.6.0). An agent key can propose a change but can't approve its own proposal, or quietly discard the queue:
@@ -99,7 +122,11 @@ The approver recorded in the audit log is the authenticated caller, as `name [pr
 ### How proposals behave
 
 * A proposal is **flagged, not active**, so recall never presents it as current.
-* A first write to a gated slot isn't gated. There is nothing to lose yet.
+* Only the first value on an empty gated slot applies directly; there is nothing to lose yet. After that, a new list item is proposed as `ADD <subject>: '<value>'`.
+* Stop language that names a current list item ("warfarin stopped today", "D/C warfarin") is proposed as a removal, even when the model files it as history or as a new entry. A hold ("hold metformin tonight") is not a stop, and hedged text ("probably stop it if …") never becomes one.
+* A future-tense order on a gated slot ("increase metformin to 1000 mg", "start apixaban") goes to the queue too.
+* A change the model aims at a gated fact goes through that fact's gate, even if the model names a different subject for it.
+* Before approving a new anticoagulant, the reviewer is warned if another one would stay current. `pending_changes` and `confirm_change` both show `⚠ … two anticoagulants`. It's a warning, not a block: an overlap can be intended. Common brand names (Coumadin, Eliquis, Xarelto, Pradaxa, Savaysa, Lovenox) are matched to their generic names. For anything wider, map drug names upstream, for example to RxNorm, before they reach Vayl.
 * Proposing the same change twice queues it once.
 * A proposal can't be confirmed once the value it would have replaced has changed. It was made against state that no longer holds; `confirm_change` says so and the change must be proposed again.
 * A rejected proposal is kept as history: that someone proposed it is worth auditing.

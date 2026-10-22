@@ -1,0 +1,2511 @@
+{
+ "mode": "review",
+ "totals": {
+  "UNSAFE": 0,
+  "WRONG": 0,
+  "AUTO": 0,
+  "QUEUED": 1769,
+  "PARTIAL": 0,
+  "MISSED": 0,
+  "OK": 279
+ },
+ "rows": [
+  {
+   "case": "switch_stopped_started",
+   "weight": 63,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban 5 mg twice daily"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "switch_stopped_started",
+   "weight": 29,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "Warfarin",
+     "target_id": 1
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban 5 mg twice daily"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "switch_stopped_started",
+   "weight": 6,
+   "facts": [
+    {
+     "action": "ARCHIVE",
+     "subject": "active_medication",
+     "value": "warfarin stopped today",
+     "time_ref": "past"
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban 5 mg twice daily"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "switch_stopped_started",
+   "weight": 4,
+   "facts": [
+    {
+     "action": "SUPERSEDE",
+     "subject": "active_medication",
+     "value": "apixaban 5 mg twice daily",
+     "target_id": 1
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "switch_from_to",
+   "weight": 40,
+   "facts": [
+    {
+     "action": "SUPERSEDE",
+     "subject": "active_medication",
+     "value": "apixaban 5 mg BID",
+     "target_id": 1
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "switch_from_to",
+   "weight": 69,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban 5 mg BID"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "switch_from_to",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban 5 mg BID"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "switch_from_to",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "RETIRE",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban 5 mg BID"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "switch_abbrev",
+   "weight": 40,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin",
+     "target_id": 1
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban 5mg bid"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "switch_abbrev",
+   "weight": 60,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban 5mg bid"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "switch_abbrev",
+   "weight": 5,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin",
+     "target_id": 1,
+     "time_ref": "past"
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban 5mg bid",
+     "time_ref": "future"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "switch_discontinued",
+   "weight": 74,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban 5 mg twice daily"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "switch_discontinued",
+   "weight": 33,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "Warfarin",
+     "target_id": 1
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban 5 mg twice daily"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "switch_discontinued",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "ARCHIVE",
+     "subject": "active_medication",
+     "value": "warfarin discontinued",
+     "time_ref": "past"
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban 5 mg twice daily"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "switch_taken_off",
+   "weight": 28,
+   "facts": [
+    {
+     "action": "SUPERSEDE",
+     "subject": "active_medication",
+     "value": "apixaban",
+     "target_id": 1
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "switch_taken_off",
+   "weight": 79,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "stop_order",
+   "weight": 70,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "stop_order",
+   "weight": 41,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin",
+     "target_id": 1
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "stop_order",
+   "weight": 7,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "Stop the warfarin."
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "stop_order",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "warfarin"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "warfarin"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "stop_past",
+   "weight": 72,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1,
+     "time_ref": "past"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "stop_past",
+   "weight": 18,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "Warfarin was discontinued yesterday.",
+     "target_id": 1,
+     "time_ref": "past",
+     "kind": "event"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "stop_past",
+   "weight": 15,
+   "facts": [
+    {
+     "action": "ARCHIVE",
+     "subject": "active_medication",
+     "value": "warfarin was discontinued yesterday",
+     "time_ref": "past"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "stop_past",
+   "weight": 13,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin",
+     "target_id": 1
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "stop_past",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "ARCHIVE",
+     "subject": "warfarin_discontinuation",
+     "value": "2026-10-21",
+     "time_ref": "past"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "stop_patient_reported",
+   "weight": 110,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1,
+     "time_ref": "past"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "stop_patient_reported",
+   "weight": 3,
+   "facts": [
+    {
+     "action": "ARCHIVE",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "time_ref": "past"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "stop_patient_reported",
+   "weight": 2,
+   "facts": [
+    {
+     "action": "ARCHIVE",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "time_ref": "past"
+    },
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "stop_patient_reported",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    },
+    {
+     "action": "ARCHIVE",
+     "subject": "patient_stopped_medication_warfarin",
+     "value": "stopped_last_week",
+     "time_ref": "past"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "start_new",
+   "weight": 120,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "lisinopril 10 mg daily"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [
+    "lisinopril"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "dose_change",
+   "weight": 103,
+   "facts": [
+    {
+     "action": "SUPERSEDE",
+     "subject": "active_medication",
+     "value": "metformin 1000 mg twice daily",
+     "target_id": 2
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "metformin"
+   ],
+   "queue_add": [
+    "metformin"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "dose_change",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "SUPERSEDE",
+     "subject": "active_medication",
+     "value": "metformin to 1000 mg twice daily",
+     "target_id": 2
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "metformin"
+   ],
+   "queue_add": [
+    "metformin"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "dose_change",
+   "weight": 16,
+   "facts": [
+    {
+     "action": "SUPERSEDE",
+     "subject": "active_medication",
+     "value": "metformin 1000 mg twice daily",
+     "target_id": 2,
+     "time_ref": "future"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "metformin"
+   ],
+   "queue_add": [
+    "metformin"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "hold_temporary",
+   "weight": 25,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "metformin_tonight_hold_before_ct_scan",
+     "value": "hold metformin tonight before the CT scan"
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "hold_temporary",
+   "weight": 10,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "metformin 500 mg twice daily \u2014 hold tonight before CT scan"
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "hold_temporary",
+   "weight": 5,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "metformin 500 mg twice daily; hold tonight before CT scan"
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "hold_temporary",
+   "weight": 5,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "hold metformin tonight before the CT scan"
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "hold_temporary",
+   "weight": 2,
+   "facts": [
+    {
+     "action": "SUPERSEDE",
+     "subject": "metformin_therapy_status",
+     "value": "held_for_contrast",
+     "target_id": 2
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "hold_temporary",
+   "weight": 2,
+   "facts": [
+    {
+     "action": "REFINE",
+     "subject": "metformin 500 mg twice daily",
+     "value": "held_for_contrast_until_48h",
+     "target_id": 2
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "hypothetical",
+   "weight": 115,
+   "facts": [],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "hypothetical",
+   "weight": 4,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "hypothetical",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "warfarin_therapy_plan",
+     "value": "stop_if_INR_stays_high"
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "code_status",
+   "weight": 120,
+   "facts": [
+    {
+     "action": "SUPERSEDE",
+     "subject": "code_status",
+     "value": "DNR",
+     "target_id": 4
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": "dnr",
+   "auto_applied": 0
+  },
+  {
+   "case": "h_brand_switch",
+   "weight": 23,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "Coumadin",
+     "target_id": 1
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "Eliquis 5 mg BID"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_brand_switch",
+   "weight": 15,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban 5 mg BID"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_brand_switch",
+   "weight": 12,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "Eliquis 5 mg BID"
+    },
+    {
+     "action": "ARCHIVE",
+     "subject": "active_medication",
+     "value": "Coumadin stopped",
+     "time_ref": "past"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_brand_switch",
+   "weight": 3,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "Eliquis 5 mg BID"
+    },
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_brand_switch",
+   "weight": 3,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "Eliquis 5 mg BID"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_british_switch",
+   "weight": 39,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban 2.5 mg twice daily"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_british_switch",
+   "weight": 20,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin",
+     "target_id": 1
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban 2.5 mg twice daily"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_british_switch",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban 2.5 mg twice daily"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_replaced_with",
+   "weight": 31,
+   "facts": [
+    {
+     "action": "SUPERSEDE",
+     "subject": "active_medication",
+     "value": "rivaroxaban 20 mg daily",
+     "target_id": 1
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "rivaroxaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_replaced_with",
+   "weight": 29,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "rivaroxaban 20 mg daily"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "rivaroxaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_no_longer_on",
+   "weight": 50,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_no_longer_on",
+   "weight": 10,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin",
+     "target_id": 1
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_off_since",
+   "weight": 18,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_off_since",
+   "weight": 24,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    },
+    {
+     "action": "ARCHIVE",
+     "subject": "patient_bleed_2026_03",
+     "value": "2026-03",
+     "time_ref": "past"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_off_since",
+   "weight": 5,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin",
+     "target_id": 1
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_off_since",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "off since 2026-03"
+    },
+    {
+     "action": "ARCHIVE",
+     "subject": "patient_bleed_march_2026",
+     "value": "bleed_march_2026",
+     "time_ref": "past"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_off_since",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "ARCHIVE",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "time_ref": "past"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_discontinue_reason",
+   "weight": 18,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "metformin 500 mg twice daily",
+     "target_id": 2
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "metformin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_discontinue_reason",
+   "weight": 25,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "metformin 500 mg twice daily",
+     "target_id": 2
+    },
+    {
+     "action": "ADD",
+     "subject": "acute_kidney_injury",
+     "value": "AKI"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "metformin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_discontinue_reason",
+   "weight": 6,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "Discontinue metformin due to AKI."
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "metformin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_discontinue_reason",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "metformin 500 mg twice daily",
+     "target_id": 2
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "reason_discontinued: AKI"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "metformin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_discontinue_reason",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "metformin 500 mg twice daily",
+     "target_id": 2
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "acute_kidney_injury"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "metformin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_begin",
+   "weight": 60,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "atorvastatin 40 mg nightly"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [
+    "atorvastatin"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_reduce_dose",
+   "weight": 60,
+   "facts": [
+    {
+     "action": "SUPERSEDE",
+     "subject": "active_medication",
+     "value": "metformin 500 mg once daily",
+     "target_id": 2
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "metformin"
+   ],
+   "queue_add": [
+    "metformin"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_hold_resume",
+   "weight": 17,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "metformin 500 mg twice daily"
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_hold_resume",
+   "weight": 13,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "Metformin held for contrast"
+    },
+    {
+     "action": "ADD",
+     "subject": "metformin_resumption",
+     "value": "resume in 48h"
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_hold_resume",
+   "weight": 9,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "Metformin held for contrast, resume in 48h."
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_hold_resume",
+   "weight": 3,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "metformin held for contrast; resume in 48h"
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_hold_resume",
+   "weight": 2,
+   "facts": [
+    {
+     "action": "SUPERSEDE",
+     "subject": "active_medication",
+     "value": "held_for_contrast",
+     "target_id": 2
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_hold_resume",
+   "weight": 4,
+   "facts": [
+    {
+     "action": "SUPERSEDE",
+     "subject": "metformin_therapy_status",
+     "value": "held_for_contrast",
+     "target_id": 2
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_consider",
+   "weight": 30,
+   "facts": [],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_consider",
+   "weight": 9,
+   "facts": [
+    {
+     "action": "SKIP",
+     "subject": "active_medication",
+     "value": "apixaban"
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_consider",
+   "weight": 12,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban (consider at discharge)"
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "h_dnr_dni",
+   "weight": 60,
+   "facts": [
+    {
+     "action": "SUPERSEDE",
+     "subject": "code_status",
+     "value": "DNR/DNI",
+     "target_id": 4
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": "dnr/dni",
+   "auto_applied": 0
+  },
+  {
+   "case": "r_do_not_stop",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "r_do_not_stop",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "do not stop the warfarin"
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "r_do_not_stop",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "SUPERSEDE",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily (continue)",
+     "target_id": 1
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "r_dont_switch_yet",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "SUPERSEDE",
+     "subject": "active_medication",
+     "value": "apixaban 5 mg BID",
+     "target_id": 1
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "r_dont_switch_yet",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban 5 mg BID"
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "r_continue_one_stop_other",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "metformin 500 mg twice daily",
+     "target_id": 2
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "metformin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "r_continue_one_stop_other",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    },
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "metformin 500 mg twice daily",
+     "target_id": 2
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "metformin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "r_continue_one_stop_other",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "metformin 500 mg twice daily",
+     "target_id": 2
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "warfarin (continue)"
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "metformin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "r_stop_two",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    },
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "metformin 500 mg twice daily",
+     "target_id": 2
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "metformin",
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "r_stop_two",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "metformin",
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "r_stop_two",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "Stop warfarin and metformin."
+    }
+   ],
+   "outcome": "QUEUED",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "metformin",
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "r_plan_next_week",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "SUPERSEDE",
+     "subject": "active_medication",
+     "value": "apixaban 5 mg BID",
+     "target_id": 1,
+     "time_ref": "future"
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "r_plan_next_week",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    },
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "apixaban 5 mg BID"
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [
+    "apixaban"
+   ],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "r_resume",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "ADD",
+     "subject": "active_medication",
+     "value": "metformin 500 mg twice daily"
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "r_resume",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "SUPERSEDE",
+     "subject": "active_medication",
+     "value": "metformin 500 mg twice daily (restarted)",
+     "target_id": 2
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "r_question",
+   "weight": 1,
+   "facts": [],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  },
+  {
+   "case": "r_question",
+   "weight": 1,
+   "facts": [
+    {
+     "action": "RETRACT",
+     "subject": "active_medication",
+     "value": "warfarin 5 mg daily",
+     "target_id": 1
+    }
+   ],
+   "outcome": "OK",
+   "mode": "review",
+   "active_meds": [
+    "metformin",
+    "warfarin"
+   ],
+   "code": "full code",
+   "queue_remove": [
+    "warfarin"
+   ],
+   "queue_add": [],
+   "queue_code": null,
+   "auto_applied": 0
+  }
+ ]
+}
