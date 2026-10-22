@@ -588,24 +588,36 @@ def _list_identity(value):
 # dictionary; a deployment that needs one should map names upstream (e.g. RxNorm) before Vayl.
 _GENERIC = {"coumadin": "warfarin", "jantoven": "warfarin", "eliquis": "apixaban", "xarelto": "rivaroxaban",
             "pradaxa": "dabigatran", "savaysa": "edoxaban", "lixiana": "edoxaban", "lovenox": "enoxaparin"}
-ANTICOAGULANTS = {"warfarin", "apixaban", "rivaroxaban", "dabigatran", "edoxaban", "enoxaparin", "heparin"}
-
-
 def _names_for(ident):
     """The identity and every brand name that folds onto it."""
     return {ident} | {b for b, g in _GENERIC.items() if g == ident}
 
 
-def duplicate_anticoagulant(m, proposal):
-    """Active anticoagulants that approving `proposal` would leave beside the one it adds, unless they
-    are themselves proposed for removal. A reviewer approving "add Eliquis" while warfarin is current
-    and its stop was never captured creates exactly the duplication this is here to catch."""
-    new = _list_identity(proposal.value)
-    if new not in ANTICOAGULANTS:
-        return []
-    leaving = {p.supersedes for p in m.pending()} | ({proposal.supersedes} if proposal.supersedes else set())
-    return [s.value for s in m.active() if s.subject == proposal.subject and s.id not in leaving
-            and _list_identity(s.value) in ANTICOAGULANTS and _list_identity(s.value) != new]
+class ConstraintViolation(ValueError):
+    """Approving would break a declared constraint. `confirm(..., override=True)` approves anyway:
+    an overlap can be intended (bridging enoxaparin to warfarin), and then a person has decided."""
+
+
+def _in_scope(c, subject, value):
+    spec = SLOT_SCHEMA.resolve(subject)
+    return spec is not None and spec.name == c.slot and (not c.members or _list_identity(value) in c.members)
+
+
+def _items(c, pairs):
+    """Distinct items a constraint counts among (subject, value) pairs: two doses of one drug are one."""
+    return {_list_identity(v) for subj, v in pairs if _in_scope(c, subj, v)}
+
+
+def _pairs(statements):
+    return [(s.subject, s.value) for s in statements]
+
+
+def broken(before, after):
+    """Constraints that going from the (subject, value) pairs `before` to `after` breaks: the class is
+    over its limit afterwards AND the change brought a new item into it. An overlap a person approved
+    (bridging) therefore lets a dose change through, but nothing new may join it."""
+    return [c for c in getattr(SLOT_SCHEMA, "constraints", ())
+            if len(_items(c, after)) > c.at_most and _items(c, after) - _items(c, before)]
 
 
 def _slot_target(active, subject, value, is_multi):
@@ -722,27 +734,51 @@ class LLMMemory:
         # bounded as memory grows; _apply still reconciles against the full active set.
         candidates = retrieval.embed_retrieve(text, self.active(), k=_RECONCILE_CONTEXT)
         before = {s.id for s in self.statements}
+        was = _pairs(self.active())
         results = [self._apply(o, text, source) for o in llm_extract_classify(text, candidates)]
-        self._hold_duplicate_anticoagulants(before)
-        return results + self._stop_sweep(text, source)
+        results += self._stop_sweep(text, source)
+        self._enforce_constraints(before, was)
+        return results
 
-    def _hold_duplicate_anticoagulants(self, before):
-        """Backstop for confirm "auto": an anticoagulant auto-added by this message while another
-        stays current (a switch whose stop half the model missed) goes back to the review queue, so a
-        switch applies whole or not at all. Runs after every fact in the message is applied, so a
-        stop and a start in one sentence are judged together."""
-        for s in [x for x in self.active() if x.id not in before and (x.metadata or {}).get("auto_applied")]:
-            ident = _list_identity(s.value)
-            others = [x for x in self.active() if x.subject == s.subject and x.id != s.id
-                      and _list_identity(x.value) in ANTICOAGULANTS and _list_identity(x.value) != ident]
-            if ident in ANTICOAGULANTS and others:
-                rival = next((x for x in self.statements if x.id == s.supersedes), None)
-                if rival is not None and rival.status is Status.SUPERSEDED:
-                    rival.status = Status.ACTIVE          # undo the replacement it made
-                s.status = Status.FLAGGED
-                s.metadata = {**(s.metadata or {}), "auto_applied": None,
-                              "pending": "SUPERSEDE" if rival is not None else "ADD",
-                              "reason": "would leave two anticoagulants active"}
+    def _item(self, s):
+        """The list item a statement is about: a removal's tombstone is about what it removed."""
+        if s.status is Status.HISTORICAL and s.supersedes and str(s.value).startswith("(retracted"):
+            t = next((x for x in self.statements if x.id == s.supersedes), None)
+            return t.value if t else s.value
+        return s.value
+
+    def _enforce_constraints(self, before, was):
+        """Judge everything this message changed TOGETHER against the declared constraints, on the
+        record as it now stands. If the message broke one (a switch applied without its stop: two
+        anticoagulants), every change it made inside that constraint's scope comes back off the
+        record and waits as ONE linked proposal, approved or rejected whole. Changes outside the
+        scope (a new statin in the same note) stand. Proposals from one message inside a scope are
+        linked even when nothing broke, so a reviewed switch can't be half-approved either."""
+        for c in getattr(SLOT_SCHEMA, "constraints", ()):
+            mine = [s for s in self.statements if s.id not in before and _in_scope(c, s.subject, self._item(s))]
+            if c in broken(was, _pairs(self.active())):
+                for s in mine:
+                    if (s.metadata or {}).get("auto_applied"):
+                        self._unapply(s, c)
+            linked = [s for s in mine if (s.metadata or {}).get("pending")]
+            if len(linked) > 1:
+                for s in linked:
+                    s.metadata = {**(s.metadata or {}), "group": linked[0].id}
+
+    def _unapply(self, s, c):
+        """Take an auto-applied change back off the record and make it a proposal instead.
+        ponytail: graph edges an auto-apply wrote stay until the next rebuild; a store with a graph
+        attached should re-project after a hold if it serves edges for gated slots."""
+        rival = next((x for x in self.statements if x.id == s.supersedes), None) if s.supersedes else None
+        if rival is not None and rival.status is Status.SUPERSEDED:
+            rival.status = Status.ACTIVE
+        if s.status is Status.HISTORICAL:              # an auto-applied removal, held as a proposed one
+            s.value, pending = rival.value, Action.RETRACT.value
+        else:
+            pending = Action.SUPERSEDE.value if rival is not None else "ADD"
+        s.status = Status.FLAGGED
+        s.metadata = {**(s.metadata or {}), "auto_applied": None, "pending": pending,
+                      "reason": f"would break {c.name}"}
 
     def _stop_sweep(self, text, source=""):
         """The last safety net for a gated list: if the sentence itself says to stop a current item
@@ -1217,36 +1253,66 @@ class LLMMemory:
         return [s for s in self.statements
                 if s.status is Status.FLAGGED and (s.metadata or {}).get("pending")]
 
-    def confirm(self, mid, source=""):
-        """Apply a pending change. Returns (Action, subject, value), or None if `mid` isn't pending.
-
-        Only now does the proposed write actually happen — the whole point of the gate is that
-        nothing was applied when the sentence was read.
-        """
+    def group(self, mid):
+        """The pending proposals decided together with `mid`: its linked group, or just itself."""
         st = next((s for s in self.pending() if s.id == mid), None)
         if st is None:
-            return None
-        proposed = (st.metadata or {}).get("pending")
-        if proposed == "ADD":
-            # A new list item: nothing is replaced. If the same value became active meanwhile, adding
-            # it again would duplicate it, so the proposal is stale instead.
-            if any(s.subject == st.subject and canon(s.value) == canon(st.value) for s in self.active()):
-                st.metadata = {**(st.metadata or {}), "pending": None, "resolved": "stale"}
-                return None
-            st.status = Status.ACTIVE
-            st.metadata = {**(st.metadata or {}), "pending": None,
-                           "resolved": "confirmed", "confirmed_by": source or "unknown"}
-            return Action.ADD, st.subject, st.value
-        target = next((s for s in self.statements if s.id == st.supersedes), None)
-        if target is None or target.status is not Status.ACTIVE:
-            # The value it was going to replace is already gone; applying now would resurrect a
-            # decision made against state that no longer holds.
-            st.metadata = {**(st.metadata or {}), "pending": None, "resolved": "stale"}
-            return None
+            return []
+        g = (st.metadata or {}).get("group")
+        return [s for s in self.pending() if g and (s.metadata or {}).get("group") == g] or [st]
 
+    def _after(self, members):
+        """The active facts as they would be with `members` applied."""
+        gone = {s.supersedes for s in members if s.supersedes}
+        return ([s for s in self.active() if s.id not in gone]
+                + [s for s in members if (s.metadata or {}).get("pending") != Action.RETRACT.value])
+
+    def violations(self, mid):
+        """Constraints approving `mid` (with its group) would break against the record as it is now."""
+        return broken(_pairs(self.active()), _pairs(self._after(self.group(mid))))
+
+    def _stale(self, st):
+        """A proposal made against state that no longer holds: the item it adds is already there, or
+        the value it replaces is already gone. Applying it would resurrect an outdated decision."""
+        if (st.metadata or {}).get("pending") == "ADD":
+            return any(s.subject == st.subject and canon(s.value) == canon(st.value) for s in self.active())
+        target = next((s for s in self.statements if s.id == st.supersedes), None)
+        return target is None or target.status is not Status.ACTIVE
+
+    def confirm(self, mid, source="", override=False):
+        """Apply a pending change and every change linked to it, as one decision. Returns
+        (Action, subject, value) for `mid`, or None if it isn't pending or the group went stale.
+
+        Only now does the proposed write actually happen — the whole point of the gate is that
+        nothing was applied when the sentence was read. The declared constraints are checked again
+        against the record as it is NOW (something may have changed while the proposal waited);
+        a break raises ConstraintViolation unless `override` says a person intends it.
+        """
+        members = self.group(mid)
+        if not members:
+            return None
+        if any(self._stale(s) for s in members):
+            for s in members:                          # whole or not at all, stale included
+                s.metadata = {**(s.metadata or {}), "pending": None, "resolved": "stale"}
+            return None
+        bad = self.violations(mid)
+        if bad and not override:
+            items = sorted({_list_identity(v) for c in bad for subj, v in _pairs(self._after(members))
+                            if _in_scope(c, subj, v)})
+            raise ConstraintViolation(f"approving would break {', '.join(c.name for c in bad)}: "
+                                      f"{', '.join(items)} would all be current")
+        done = {s.id: self._confirm_one(s, source, bool(bad)) for s in members}
+        return done[mid]
+
+    def _confirm_one(self, st, source, overridden):
+        proposed = (st.metadata or {}).get("pending")
+        st.metadata = {**(st.metadata or {}), "pending": None, "resolved": "confirmed",
+                       "confirmed_by": source or "unknown", **({"override": True} if overridden else {})}
+        if proposed == "ADD":                          # a new list item: nothing is replaced
+            st.status = Status.ACTIVE
+            return Action.ADD, st.subject, st.value
+        target = next(s for s in self.statements if s.id == st.supersedes)
         target.status = Status.SUPERSEDED
-        st.metadata = {**(st.metadata or {}), "pending": None,
-                       "resolved": "confirmed", "confirmed_by": source or "unknown"}
         self._gretire(target.subject)
         if proposed == Action.RETRACT.value:
             st.status = Status.HISTORICAL
@@ -1257,13 +1323,16 @@ class LLMMemory:
 
     def reject(self, mid, source=""):
         """Discard a pending change. The current value stands and the proposal is kept as history —
-        that someone proposed stopping a medication is itself worth being able to audit."""
-        st = next((s for s in self.pending() if s.id == mid), None)
-        if st is None:
+        that someone proposed stopping a medication is itself worth being able to audit. A linked
+        proposal is rejected with its whole group."""
+        members = self.group(mid)
+        if not members:
             return None
-        st.status = Status.HISTORICAL
-        st.metadata = {**(st.metadata or {}), "pending": None,
-                       "resolved": "rejected", "rejected_by": source or "unknown"}
+        for st in members:
+            st.status = Status.HISTORICAL
+            st.metadata = {**(st.metadata or {}), "pending": None,
+                           "resolved": "rejected", "rejected_by": source or "unknown"}
+        st = next(s for s in members if s.id == mid)
         return Action.SKIP, st.subject, st.value
 
     def _history(self):

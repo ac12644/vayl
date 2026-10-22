@@ -6,13 +6,13 @@
     "category, which the critical-fact channel uses to bypass ranking; and marks values that",
     "must be stored exactly as stated rather than normalized.",
     "Set VAYL_CRITICAL_CATEGORIES=critical so the tagged slots are always injected.",
-    "Slots marked \"confirm\" do not auto-apply a replacement or removal: the change is proposed, the current value stands, and a person approves it via confirm_change / reject_change. Use it where the WRITE is the hazard \u2014 an LLM reading 'we should stop the warfarin' is not an order to stop it.",
-    "Slots marked \"multi\" hold a LIST: allergies and the active medication list are several concurrent values, not one. A new distinct value ADDS to the list instead of replacing the others \u2014 without this, recording a second allergy silently deletes the first. Allergy is NOT confirm-gated because surfacing a newly discovered allergy is safety-positive and must be immediate; a medication change/stop still is."
+    "Slots marked \"confirm\" do not auto-apply a replacement or removal: the change is proposed, the current value stands, and a person approves it via confirm_change / reject_change. Use it where the WRITE is the hazard — an LLM reading 'we should stop the warfarin' is not an order to stop it.",
+    "Slots marked \"multi\" hold a LIST: allergies and the active medication list are several concurrent values, not one. A new distinct value ADDS to the list instead of replacing the others — without this, recording a second allergy silently deletes the first. Allergy is NOT confirm-gated because surfacing a newly discovered allergy is safety-positive and must be immediate; a medication change/stop still is."
   ],
   "slots": [
     {
       "name": "allergy",
-      "description": "a substance the patient reacts to, and the reaction (a patient may have several \u2014 this is a list)",
+      "description": "a substance the patient reacts to, and the reaction (a patient may have several — this is a list)",
       "category": "critical",
       "verbatim": true,
       "aliases": [
@@ -40,7 +40,7 @@
     },
     {
       "name": "code_status",
-      "description": "resuscitation preference \u2014 full code, DNR, DNI",
+      "description": "resuscitation preference — full code, DNR, DNI",
       "category": "critical",
       "aliases": [
         "resuscitation_status",
@@ -65,6 +65,22 @@
         "attending",
         "attending_physician",
         "responsible_clinician"
+      ]
+    }
+  ],
+  "constraints": [
+    {
+      "name": "one_anticoagulant",
+      "slot": "active_medication",
+      "at_most": 1,
+      "class": [
+        "warfarin",
+        "apixaban",
+        "rivaroxaban",
+        "dabigatran",
+        "edoxaban",
+        "enoxaparin",
+        "heparin"
       ]
     }
   ]

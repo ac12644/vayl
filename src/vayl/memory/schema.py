@@ -36,6 +36,10 @@ Declaring a slot also carries two properties the rest of the system reads:
                 conversational text, and "stop the warfarin" appearing in a sentence is not the
                 same as an order to stop it. For most slots being wrong is recoverable; for some
                 the write itself is the hazard, and those need a person in the loop.
+    constraints (top level, beside "slots") — rules over several facts at once, e.g. at most one
+                current anticoagulant. Every change one message makes is judged together against
+                them; if the message would break one, its changes in that rule's scope are held as
+                ONE linked proposal, approved or rejected whole, and re-checked at approval.
     multi     — the slot holds a LIST, not a single value: a patient has many allergies and many
                 active medications at once. A new distinct value COEXISTS with the others instead
                 of superseding them. Without this, recording a second allergy silently deletes the
@@ -93,11 +97,25 @@ class SlotSpec:
         return {_norm(self.name)} | {_norm(a) for a in self.aliases}
 
 
+@dataclass
+class Constraint:
+    """A rule over SEVERAL facts at once: at most `at_most` distinct items of `slot` may be current,
+    counting only the items in `members` (a class, matched by item identity) or every item when no
+    class is given. "No two anticoagulants" is {"slot": "active_medication", "at_most": 1,
+    "class": ["warfarin", "apixaban", ...]}. Checked on the memory as it would be after a change, so
+    a switch whose stop half went missing is caught however the extractor labelled it."""
+    name: str
+    slot: str
+    at_most: int = 1
+    members: frozenset = frozenset()
+
+
 class SlotSchema:
     """A declared vocabulary. Empty by default — a general-purpose deployment declares nothing
     and behaves exactly as it did before this existed."""
 
-    def __init__(self, slots=()):
+    def __init__(self, slots=(), constraints=()):
+        self.constraints = list(constraints)
         self.slots = list(slots)
         self._by_key = {}
         for spec in self.slots:
@@ -190,7 +208,18 @@ def from_dict(obj):
             multi=bool(raw.get("multi", False)),
             aliases=[str(a) for a in (raw.get("aliases") or [])],
         ))
-    return SlotSchema(slots)
+    names = {s.name for s in slots}
+    constraints = []
+    for i, raw in enumerate((obj or {}).get("constraints", [])):
+        slot, at_most = str(raw.get("slot") or ""), raw.get("at_most", 1)
+        if slot not in names:
+            raise ValueError(f"constraint {i}: slot {slot!r} is not a declared slot")
+        if not isinstance(at_most, int) or isinstance(at_most, bool) or at_most < 1:
+            raise ValueError(f"constraint {i}: at_most must be a whole number of at least 1, not {at_most!r}")
+        constraints.append(Constraint(name=str(raw.get("name") or f"{slot}_at_most_{at_most}"), slot=slot,
+                                      at_most=at_most,
+                                      members=frozenset(str(m).strip().lower() for m in raw.get("class") or ())))
+    return SlotSchema(slots, constraints)
 
 
 _PRESET_PREFIX = "preset:"
