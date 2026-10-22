@@ -3,7 +3,10 @@
 All notable changes to Vayl are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.10.0] â€” 2026-10-22
+
+REST routes for every tool with a generated API reference, and memory backends for Google ADK,
+LlamaIndex and AutoGen. No change to the MCP tools or their arguments.
 
 ### Added
 - **REST routes for every tool.** `vayl-server` serves `POST /v1/tools/<name>` (the tool's arguments
@@ -397,6 +400,7 @@ old, removals retract, ambiguous input is flagged, and history stays queryable â
 (`vayl-mcp`) or an authenticated team server (`vayl-server`). SQLite by default, optional Postgres;
 encryption at rest, an Ed25519-signed tamper-evident audit chain, RBAC, and GDPR tools.
 
+[0.10.0]: https://github.com/ac12644/vayl/releases/tag/v0.10.0
 [0.9.1]: https://github.com/ac12644/vayl/releases/tag/v0.9.1
 [0.9.0]: https://github.com/ac12644/vayl/releases/tag/v0.9.0
 [0.8.0]: https://github.com/ac12644/vayl/releases/tag/v0.8.0
