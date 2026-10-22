@@ -356,7 +356,8 @@ def test_real_mcp_tool_call_over_http_returns_its_result(monkeypatch, tmp_path):
 
 
 def test_openapi_spec_matches_the_server_routes():
-    """openapi/vayl-server.yaml renders the API Reference; it must list exactly the routes served."""
+    """openapi/vayl-server.yaml renders the API Reference; it must list exactly the routes served,
+    with one /v1/tools/<name> operation per registered tool."""
     yaml = pytest.importorskip("yaml")
     import pathlib
 
@@ -365,5 +366,21 @@ def test_openapi_spec_matches_the_server_routes():
     app = srv.build_app(Starlette(routes=[]), Auth(sqlite3.connect(":memory:")), _StoreStub())
     routes = {getattr(r, "path", "") for r in app.app.app.routes}          # through both middlewares
     served = {"/mcp" if p == "" else p for p in routes}                     # the MCP app is mounted at /
-    assert set(spec["paths"]) == served
+    tools = {t.name for t in asyncio.run(mcp_server.mcp.list_tools())}
+    rest = {"/v1/tools"} | {f"/v1/tools/{t}" for t in tools}
+    assert "/v1" in served
+    assert set(spec["paths"]) == (served - {"/v1"}) | rest
     assert spec["info"]["version"] == vayl.__version__
+
+
+def test_the_generated_spec_and_tool_pages_are_current():
+    """The spec and docs/api-reference/tools/*.md are generated from the tool registry. A tool change
+    without rerunning `python openapi/generate.py` fails here instead of shipping stale docs."""
+    pytest.importorskip("yaml")
+    import pathlib
+    import subprocess
+    import sys
+    root = pathlib.Path(__file__).parents[1]
+    r = subprocess.run([sys.executable, str(root / "openapi" / "generate.py"), "--check"],
+                       capture_output=True, text=True, cwd=root)
+    assert r.returncode == 0, r.stderr

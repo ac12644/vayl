@@ -31,7 +31,7 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-from vayl.api import mcp_server
+from vayl.api import mcp_server, rest
 from vayl.auth import sso
 from vayl.config import env_int
 
@@ -281,6 +281,7 @@ def build_app(mcp_app, auth, store, sso_verifier=None):
         Route("/healthz", healthz, methods=["GET"]),
         Route("/readyz", readyz, methods=["GET"]),
         Route("/metrics", metrics, methods=["GET"]),
+        Mount("/v1", app=AuthMiddleware(rest.app(), auth, sso_verifier)),   # REST tool routes, same auth
         Mount("/", app=AuthMiddleware(mcp_app, auth, sso_verifier)),
     ], lifespan=lifespan)
     # request ID outermost, so even a 413/429 shed at the edge is logged and traceable

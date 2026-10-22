@@ -3,6 +3,19 @@
 All notable changes to Vayl are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **REST routes for every tool.** `vayl-server` serves `POST /v1/tools/<name>` (the tool's arguments
+  as a JSON object, `{"result": "..."}` back) and `GET /v1/tools` (the tools and their JSON Schemas).
+  They sit behind the same authentication as `/mcp` and call the tools through FastMCP, so argument
+  validation, capability and scope checks, auditing and metrics are identical. Errors use status
+  codes: `401`, `403` (capability or scope), `404` (unknown tool), `422` (bad arguments, with `detail`).
+- **An API reference generated from the code.** `openapi/generate.py` builds
+  `openapi/vayl-server.yaml` and the API Reference tool pages from the tool registry: one typed
+  operation per tool, with its capability, annotations and a real captured example. A test fails if
+  the committed spec drifts from the tools.
+
 ## [0.9.1] — 2026-10-22
 
 Found by testing Vayl live inside Claude Code: gpt-6 support, server instructions that tell clients

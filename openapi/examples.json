@@ -1,0 +1,307 @@
+{
+  "attest": {
+    "request": {
+      "subject": "allergy",
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "Attestation #1: 'allergy' = penicillin, causes hives  (as of 2026-10-22T04:58:53+00:00).\n  signed & anchored to audit head 1ca77d2829875165… — verify with verify_receipt #1."
+    }
+  },
+  "audit_log": {
+    "request": {
+      "limit": 5,
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "2026-10-22T04:58:53+00:00  attest             user=pt_4471  subject=allergy\n2026-10-22T04:58:53+00:00  record_decision    user=pt_4471  Held amoxicillin and prescribed azithromycin.\n2026-10-22T04:58:52+00:00  reject_change      user=pt_4471  #9 rejected by ops [prin_d710480023f5] (note: Dr. Okafor: keep apixaban)\n2026-10-22T04:58:52+00:00  remember           user=pt_4471  FLAG active_medication\n2026-10-22T04:58:49+00:00  forget             user=pt_4471  RETRACT care_team_lead=Dr. Lindqvist"
+    }
+  },
+  "check_before_act": {
+    "request": {
+      "subject": "active_medication",
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "✅ SAFE to act on 'active_medication'.\n  current: active_medication = apixaban 5 mg twice daily"
+    }
+  },
+  "confirm_change": {
+    "request": {
+      "memory_id": 4,
+      "user_id": "pt_4471",
+      "decided_by": "Dr. Okafor, verified with pharmacy"
+    },
+    "status": 200,
+    "response": {
+      "result": "Approved #4: SUPERSEDE active_medication = apixaban 5 mg twice daily"
+    }
+  },
+  "create_principal": {
+    "request": {
+      "name": "ward-7-assistant",
+      "role": "agent",
+      "scopes": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "Created principal prin_c61d3e3804ab 'ward-7-assistant' (role: agent, kind: agent, tenant: default).\n  API key (shown once — save it now):\n  vayl_sk_…"
+    }
+  },
+  "delete": {
+    "request": {
+      "subject": "primary_diagnosis",
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "Erased 1 record(s) for 'primary_diagnosis'; redacted its values from 1 decision snapshot(s).\n  signed erasure receipt #2 issued — verify with verify_receipt #2 (or independently with the public key from export_public_key)."
+    }
+  },
+  "delete_all": {
+    "request": {
+      "user_id": "pt_9001"
+    },
+    "status": 200,
+    "response": {
+      "result": "Erased all memory for 'pt_9001' (1 record(s)).\n  signed erasure receipt #3 issued — verify with verify_receipt #3."
+    }
+  },
+  "explain_decision": {
+    "request": {
+      "decision_id": 1,
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "Decision #1  (2026-10-22T04:58:53+00:00)\n  action: Held amoxicillin and prescribed azithromycin.\n  believed at the time:\n  • #2 primary_diagnosis = atrial fibrillation  [conf 0.95, status ACTIVE]\n  • #3 allergy = penicillin, causes hives  [conf 0.95, status ACTIVE]\n  • #4 active_medication = apixaban 5 mg twice daily  [conf 0.95, superseded #1, status ACTIVE]\n  ✓ receipt verified (record intact)"
+    }
+  },
+  "export_memory": {
+    "request": {
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "{\n  \"space\": {\n    \"user_id\": \"pt_4471\",\n    \"agent_id\": \"\",\n    \"run_id\": \"\"\n  },\n  \"count\": 9,\n  \"records\": [\n    {\n      \"id\": 1,\n      \"subject\": \"active_medication\",\n      \"value\": \"warfarin 5 mg daily\",\n      \"scope\": \"global\",\n      \"status\": \"SUPERSEDED\",\n      \"supersedes\": null,\n      \"confidence\": 0.95,\n      \"metadata\": {\n        \"category\": \"critical\"\n      }\n    },\n    {\n      \"id\": 2,\n      \"subject\": \"primary_diagnosis\",\n      \"value\": \"atrial fibrillation\",\n      \"scope\": \"global\",\n      \"status\": \"ACTIVE\",\n      \"supersedes\": null,\n      \"confidence\": 0.95,\n      \"metadata\": {\n        \"category\": \"critical\"\n      }\n    },\n    {\n      \"id\": 3,\n      \"subject\": \"allergy\",\n      \"value\": \"penicillin, causes hives\",\n      \"scope\": \"global\",\n      \"status\": \"ACTIVE\",\n      \"supersedes\": null,\n      \"confidence\": 0.95,\n      \"metadata\": {\n        \"category\": \"critical\"\n      }\n    },\n    {\n      \"id\": 4,\n      \"subject\": \"active_medication\",\n      \"value\": \"apixaban 5 mg twice daily\",\n      \"scope\": \"global\",\n      \"status\": \"ACTIVE\",\n      \"supersedes\": 1,\n      \"confidence\": 0.95,\n      \"metadata\": {\n        \"pending\": null,\n        \"category\": \"critical\",\n        \"resolved\": \"confirmed\",\n        \"confirmed_by\": \"ops [prin_d710480023f5] (note: Dr. Okafor, verified with pharmacy)\"\n      }\n    },\n    {\n      \"id\": 5,\n      \"subject\": \"active_medication\",\n      \"value\": \"warfarin 5 mg daily\",\n      \"scope\": \"global\",\n      \"status\": \"HISTORICAL\",\n      \"supersedes\": null,\n      \"confidence\": 0.95,\n      \"metadata\": null\n    },\n    {\n      \"id\": 6,\n      \"subject\": \"care_team_lead\",\n      \"value\": \"Dr. Okafor\",\n      \"scope\": \"global\",\n      \"status\": \"SUPERSEDED\",\n      \"supersedes\": null,\n      \"confidence\": 0.95,\n      \"metadata\": null\n    },\n    {\n      \"id\": 7,\n      \"subject\": \"care_team_lead\",\n      \"value\": \"Dr. Lindqvist\",\n      \"scope\": \"global\",\n      \"status\": \"SUPERSEDED\",\n      \"supersedes\": 6,\n      \"confidence\": 0.95,\n      \"metadata\": null\n    },\n    {\n      \"id\": 8,\n      \"subject\": \"care_team_lead\",\n      \"value\": \"(retracted: Dr. Lindqvist)\",\n      \"scope\": \"global\",\n      \"status\": \"HISTORICAL\",\n      \"supersedes\": 7,\n      \"confidence\": 0.95,\n      \"metadata\": null\n    },\n    {\n      \"id\": 9,\n      \"subject\": \"active_medication\",\n      \"value\": \"apixaban 5 mg twice daily\",\n      \"scope\": \"global\",\n      \"status\": \"HISTORICAL\",\n      \"supersedes\": 4,\n      \"confidence\": 0.95,\n      \"metadata\": {\n        \"pending\": null,\n        \"category\": \"critical\",\n        \"resolved\": \"rejected\",\n        \"rejected_by\": \"ops [prin_d710480023f5] (note: Dr. Okafor: keep apixaban)\"\n      }\n    }\n  ],\n  \"decisions\": [\n    {\n      \"id\": 1,\n      \"ts\": \"2026-10-22T04:58:53+00:00\",\n      \"user_id\": \"pt_4471\",\n      \"agent_id\": \"\",\n      \"run_id\": \"\",\n      \"summary\": \"Held amoxicillin and prescribed azithromycin.\",\n      \"beliefs\": [\n        {\n          \"confidence\": 0.95,\n          \"id\": 2,\n          \"set_at\": 1792645112.828438,\n          \"source\": \"\",\n          \"status\": \"ACTIVE\",\n          \"subject\": \"primary_diagnosis\",\n          \"supersedes\": null,\n          \"value\": \"atrial fibrillation\"\n        },\n        {\n          \"confidence\": 0.95,\n          \"id\": 3,\n          \"set_at\": 1792645115.846117,\n          \"source\": \"\",\n          \"status\": \"ACTIVE\",\n          \"subject\": \"allergy\",\n          \"supersedes\": null,\n          \"value\": \"penicillin, causes hives\"\n        },\n        {\n          \"confidence\": 0.95,\n          \"id\": 4,\n          \"set_at\": 1792645119.939254,\n          \"source\": \"\",\n          \"status\": \"ACTIVE\",\n          \"subject\": \"active_medication\",\n          \"supersedes\": 1,\n          \"value\": \"apixaban 5 mg twice daily\"\n        }\n      ],\n      \"entry_hash\": \"60f67e6a7018905021e865f577bf1e4aac3e3ca51dbc817daa70f42f841ba6f4\",\n      \"anchor\": \"cd52c094c35c8d7718f647da7b56d34551a2998226ac6012fdc3ae0ae80d68ce\",\n      \"signed\": true,\n      \"verified\": true\n    }\n  ],\n  \"audit\": [\n    {\n      \"ts\": \"2026-10-22T04:58:55+00:00\",\n      \"user_id\": \"pt_4471\",\n      \"agent_id\": \"\",\n      \"run_id\": \"\",\n      \"action\": \"set_reconcile_policy\",\n      \"detail\": \"mode=AUTHORITY authority={'pharmacy': 3, 'clinician': 2, 'ehr': 1}\",\n      \"tenant\": \"default\"\n    },\n    {\n      \"ts\": \"2026-10-22T04:58:53+00:00\",\n      \"user_id\": \"pt_4471\",\n      \"agent_id\": \"\",\n      \"run_id\": \"\",\n      \"action\": \"attest\",\n      \"detail\": \"subject=allergy\",\n      \"tenant\": \"default\"\n    },\n    {\n      \"ts\": \"2026-10-22T04:58:53+00:00\",\n      \"user_id\": \"pt_4471\",\n      \"agent_id\": \"\",\n      \"run_id\": \"\",\n      \"action\": \"record_decision\",\n      \"detail\": \"Held amoxicillin and prescribed azithromycin.\",\n      \"tenant\": \"default\"\n    },\n    {\n      \"ts\": \"2026-10-22T04:58:52+00:00\",\n      \"user_id\": \"pt_4471\",\n      \"agent_id\": \"\",\n      \"run_id\": \"\",\n      \"action\": \"reject_change\",\n      \"detail\": \"#9 rejected by ops [prin_d710480023f5] (note: Dr. Okafor: keep apixaban)\",\n      \"tenant\": \"default\"\n    },\n    {\n      \"ts\": \"2026-10-22T04:58:52+00:00\",\n      \"user_id\": \"pt_4471\",\n      \"agent_id\": \"\",\n      \"run_id\": \"\",\n      \"action\": \"remember\",\n      \"detail\": \"FLAG active_medication\",\n      \"tenant\": \"default\"\n    },\n    {\n      \"ts\": \"2026-10-22T04:58:49+00:00\",\n      \"user_id\": \"pt_4471\",\n      \"agent_id\": \"\",\n      \"run_id\": \"\",\n      \"action\": \"forget\",\n      \"detail\": \"RETRACT care_team_lead=Dr. Lindqvist\",\n      \"tenant\": \"default\"\n    },\n    {\n      \"ts\": \"2026-10-22T04:58:46+00:00\",\n      \"user_id\": \"pt_4471\",\n      \"agent_id\": \"\",\n      \"run_id\": \"\",\n      \"action\": \"update\",\n      \"detail\": \"#6: 'Dr. Okafor' -> 'Dr. Lindqvist'\",\n      \"tenant\": \"default\"\n    },\n    {\n      \"ts\": \"2026-10-22T04:58:46+00:00\",\n      \"user_id\": \"pt_4471\",\n      \"agent_id\": \"\",\n      \"run_id\": \"\",\n      \"action\": \"remember\",\n      \"detail\": \"ADD care_team_lead\",\n      \"tenant\": \"default\"\n    },\n    {\n      \"ts\": \"2026-10-22T04:58:43+00:00\",\n      \"user_id\": \"pt_4471\",\n      \"agent_id\": \"\",\n      \"run_id\": \"\",\n      \"action\": \"check_before_act\",\n      \"detail\": \"active_medication: SAFE\",\n      \"tenant\": \"default\"\n    },\n    {\n      \"ts\": \"2026-10-22T04:58:43+00:00\",\n      \"user_id\": \"pt_4471\",\n      \"agent_id\": \"\",\n      \"run_id\": \"\",\n      \"action\": \"safe_recall\",\n      \"detail\": \"Can we give amoxicillin?: ANSWERED\",\n      \"tenant\": \"default\"\n    },\n    {\n      \"ts\": \"2026-10-22T04:58:41+00:00\",\n      \"user_id\": \"pt_4471\",\n      \"agent_id\": \"\",\n      \"run_id\": \"\",\n      \"action\": \"recall\",\n      \"detail\": \"What anticoagulant was the patient on before?\",\n      \"tenant\": \"default\"\n    },\n    {\n      \"ts\": \"2026-10-22T04:58:39+00:00\",\n      \"user_id\": \"pt_4471\",\n      \"agent_id\": \"\",\n      \"run_id\": \"\",\n      \"action\": \"recall\",\n      \"detail\": \"What anticoagulant is the patient on?\",\n      \"tenant\": \"default\"\n    },\n    {\n      \"ts\": \"2026-10-22T04:58:39+00:00\",\n      \"user_id\": \"pt_4471\",\n      \"agent_id\": \"\",\n      \"run_id\": \"\",\n      \"action\": \"confirm_change\",\n      \"detail\": \"#4 SUPERSEDE active_medication by ops [prin_d710480023f5] (note: Dr. Okafor, verified with pharmacy)\",\n      \"tenant\": \"default\"\n    },\n    {\n      \"ts\": \"2026-10-22T04:58:39+00:00\",\n      \"user_id\": \"pt_4471\",\n      \"agent_id\": \"\",\n      \"run_id\": \"\",\n      \"action\": \"remember\",\n      \"detail\": \"FLAG active_medication; ARCHIVE active_medication\",\n      \"tenant\": \"default\"\n    },\n    {\n      \"ts\": \"2026-10-22T04:58:35+00:00\",\n      \"user_id\": \"pt_4471\",\n      \"agent_id\": \"\",\n      \"run_id\": \"\",\n      \"action\": \"remember\",\n      \"detail\": \"ADD allergy\",\n      \"tenant\": \"default\"\n    },\n    {\n      \"ts\": \"2026-10-22T04:58:32+00:00\",\n      \"user_id\": \"pt_4471\",\n      \"agent_id\": \"\",\n      \"run_id\": \"\",\n      \"action\": \"remember\",\n      \"detail\": \"ADD active_medication; ADD primary_diagnosis\",\n      \"tenant\": \"default\"\n    }\n  ],\n  \"receipts\": [\n    {\n      \"id\": 1,\n      \"payload\": {\n        \"chain_hash\": \"1ca77d2829875165a37c529530f1b42423846475f9b755f254ab6a9217f358da\",\n        \"kind\": \"knowledge_attestation\",\n        \"scope\": \"pt_4471//\",\n        \"subject\": \"allergy\",\n        \"ts\": \"2026-10-22T04:58:53+00:00\",\n        \"value\": \"penicillin, causes hives\"\n      },\n      \"signature\": \"29949b2fb332744d1ec60bb006a3c276e748ea5843eadbb899879371b05bbf3b65674d04856e262ae27b5f83d24548fcae56bc4fd7c29f4622c9223369bfee03\",\n      \"public_key\": \"0b5565ce585b364f8cc403d0b30850883f6e084b10bbf4efedb18ef9fb3eef56\"\n    }\n  ]\n}"
+    }
+  },
+  "export_public_key": {
+    "request": {},
+    "status": 200,
+    "response": {
+      "result": "Ed25519 public key (hex):\n0b5565ce585b364f8cc403d0b30850883f6e084b10bbf4efedb18ef9fb3eef56"
+    }
+  },
+  "forget": {
+    "request": {
+      "text": "Dr. Lindqvist is no longer on this patient's care team.",
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "Retracted (retained in history for audit): care_team_lead = Dr. Lindqvist"
+    }
+  },
+  "get_memory": {
+    "request": {
+      "memory_id": 4,
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "#4  active_medication = apixaban 5 mg twice daily\n  status=ACTIVE  scope=global  confidence=0.95  supersedes=#1  metadata={'pending': None, 'category': 'critical', 'resolved': 'confirmed', 'confirmed_by': 'ops [prin_d710480023f5] (note: Dr. Okafor, verified with pharmacy)'}"
+    }
+  },
+  "get_reconcile_policy": {
+    "request": {
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "Policy: RECENCY (default — newer assertion wins)."
+    }
+  },
+  "health": {
+    "request": {},
+    "status": 200,
+    "response": {
+      "result": "config: LLM_PROVIDER=openai, model=gpt-6-luna\nlicense: community\nencryption: on · signing: on\ndb: ok\nembedder: ok\nllm: ok\ngraph: disabled"
+    }
+  },
+  "history": {
+    "request": {
+      "subject": "active_medication",
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "History for 'active_medication' (oldest → newest):\n  1. warfarin 5 mg daily  [SUPERSEDED]\n  2. apixaban 5 mg twice daily  [ACTIVE]\n  3. warfarin 5 mg daily  [HISTORICAL]"
+    }
+  },
+  "license_status": {
+    "request": {},
+    "status": 200,
+    "response": {
+      "result": "Community edition — up to 3 principals. No license installed.\n  principals in use: 1 / 3"
+    }
+  },
+  "list_memories": {
+    "request": {
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "• primary_diagnosis = atrial fibrillation  (#2)\n• allergy = penicillin, causes hives  (#3)\n• active_medication = apixaban 5 mg twice daily  (#4)\n\n— history (superseded / retracted / archived) —\n  ◦ active_medication = warfarin 5 mg daily  [HISTORICAL]\n  ◦ active_medication = warfarin 5 mg daily  [SUPERSEDED]"
+    }
+  },
+  "list_principals": {
+    "request": {},
+    "status": 200,
+    "response": {
+      "result": "• prin_d710480023f5  ops  [admin]  agent\n• prin_c61d3e3804ab  ward-7-assistant  [agent]  agent"
+    }
+  },
+  "pending_changes": {
+    "request": {
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "1 change(s) awaiting approval:\n  #4 REPLACE active_medication: 'warfarin 5 mg daily' -> 'apixaban 5 mg twice daily'\n        said: 'Warfarin stopped today. Started apixaban 5 mg twice daily.'\n\nApprove with confirm_change(memory_id), discard with reject_change(memory_id)."
+    }
+  },
+  "purge_expired": {
+    "request": {
+      "older_than_days": 3650,
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "Purged 0 record(s) older than 3650 days."
+    }
+  },
+  "recall": {
+    "request": {
+      "question": "What anticoagulant is the patient on?",
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "The patient is on apixaban 5 mg twice daily."
+    }
+  },
+  "recall_related": {
+    "request": {
+      "question": "Who is responsible for this patient's care?",
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "I don’t know who is responsible for this patient’s care."
+    }
+  },
+  "record_decision": {
+    "request": {
+      "action_summary": "Held amoxicillin and prescribed azithromycin.",
+      "question": "Can we give amoxicillin?",
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "Decision #1 recorded, bound to 3 belief(s).\n  based on: No—penicillin causes hives, and amoxicillin is a penicillin-class antibiotic.\n  receipt: 60f67e6a70189050…  (signed; verify with explain_decision #1)"
+    }
+  },
+  "reject_change": {
+    "request": {
+      "memory_id": 9,
+      "user_id": "pt_4471",
+      "decided_by": "Dr. Okafor: keep apixaban"
+    },
+    "status": 200,
+    "response": {
+      "result": "Discarded #9. The current value is unchanged."
+    }
+  },
+  "remember": {
+    "request": {
+      "text": "Patient is on warfarin 5 mg daily for atrial fibrillation.",
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "Stored: [ADD] active_medication = warfarin 5 mg daily; [ADD] primary_diagnosis = atrial fibrillation"
+    }
+  },
+  "revoke_principal": {
+    "request": {
+      "principal_id": "prin_c61d3e3804ab"
+    },
+    "status": 200,
+    "response": {
+      "result": "Revoked prin_c61d3e3804ab — its API key no longer works."
+    }
+  },
+  "safe_recall": {
+    "request": {
+      "question": "Can we give amoxicillin?",
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "No—penicillin causes hives, and amoxicillin is a penicillin antibiotic."
+    }
+  },
+  "set_reconcile_policy": {
+    "request": {
+      "mode": "AUTHORITY",
+      "authority": {
+        "pharmacy": 3,
+        "clinician": 2,
+        "ehr": 1
+      },
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "Reconciliation policy for this space set to AUTHORITY.  authority ranks: {'pharmacy': 3, 'clinician': 2, 'ehr': 1}"
+    }
+  },
+  "stats": {
+    "request": {},
+    "status": 200,
+    "response": {
+      "result": "Tools  (calls · avg ms · errors):\n  attest: 1 · 2.2 ms · 0 err\n  audit_log: 1 · 0.3 ms · 0 err\n  check_before_act: 1 · 1.9 ms · 0 err\n  confirm_change: 1 · 2.4 ms · 0 err\n  create_principal: 1 · 0.9 ms · 0 err\n  delete: 1 · 2.3 ms · 0 err\n  delete_all: 1 · 2.1 ms · 0 err\n  explain_decision: 1 · 2.1 ms · 0 err\n  export_memory: 1 · 4.7 ms · 0 err\n  export_public_key: 1 · 0.0 ms · 0 err\n  forget: 1 · 2945.8 ms · 0 err\n  get_memory: 1 · 0.1 ms · 0 err\n  get_reconcile_policy: 1 · 0.1 ms · 0 err\n  history: 1 · 0.8 ms · 0 err\n  license_status: 1 · 0.0 ms · 0 err\n  list_memories: 2 · 0.9 ms · 0 err\n  list_principals: 1 · 0.1 ms · 0 err\n  pending_changes: 2 · 0.5 ms · 0 err\n  purge_expired: 1 · 0.7 ms · 0 err\n  recall: 2 · 1205.7 ms · 0 err\n  recall_related: 1 · 1420.9 ms · 0 err\n  record_decision: 1 · 1199.5 ms · 0 err\n  reject_change: 1 · 1.1 ms · 0 err\n  remember: 6 · 3162.9 ms · 0 err\n  revoke_principal: 1 · 0.7 ms · 0 err\n  safe_recall: 1 · 1601.5 ms · 0 err\n  set_reconcile_policy: 1 · 1.9 ms · 0 err\n  update_memory: 1 · 439.7 ms · 0 err\n  verify_audit: 1 · 7.2 ms · 0 err\n  verify_receipt: 1 · 0.5 ms · 0 err\n\nReconciliation actions  (9 total):\n  ADD: 5 (56%)\n  FLAG: 2 (22%)\n  ARCHIVE: 1 (11%)\n  RETRACT: 1 (11%)"
+    }
+  },
+  "update_memory": {
+    "request": {
+      "memory_id": 6,
+      "new_value": "Dr. Lindqvist",
+      "user_id": "pt_4471"
+    },
+    "status": 200,
+    "response": {
+      "result": "Updated #6: 'Dr. Okafor' → 'Dr. Lindqvist' (now #7; old kept in history)."
+    }
+  },
+  "verify_audit": {
+    "request": {},
+    "status": 200,
+    "response": {
+      "result": "✓ Audit chain INTACT — 15 entries verified."
+    }
+  },
+  "verify_receipt": {
+    "request": {
+      "receipt_id": 1
+    },
+    "status": 200,
+    "response": {
+      "result": "Receipt #1 [knowledge_attestation] — 'allergy' = penicillin, causes hives  (ts 2026-10-22T04:58:53+00:00)\n  ✓ VALID — signature verified, payload intact"
+    }
+  }
+}

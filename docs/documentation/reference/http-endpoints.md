@@ -5,10 +5,12 @@ icon: network-wired
 
 # HTTP endpoints
 
-`vayl-server` serves MCP over streamable HTTP at `POST /mcp`, plus three unauthenticated-by-default operational routes. Every response carries an `X-Request-ID` header. Run it behind a reverse proxy that terminates TLS; don't expose it directly.
+`vayl-server` serves every tool as a REST operation under `/v1`, MCP over streamable HTTP at `POST /mcp`, and three unauthenticated-by-default operational routes. Every response carries an `X-Request-ID` header. Run it behind a reverse proxy that terminates TLS; don't expose it directly.
 
 | Route | Auth | Purpose |
 | --- | --- | --- |
+| `POST /v1/tools/<name>` | Bearer API key or OIDC JWT | Run one tool: JSON arguments in, `{"result": "..."}` out. Documented per tool in the [HTTP API reference](https://vayl.gitbook.io/vayl-docs/api-reference). |
+| `GET /v1/tools` | Bearer API key or OIDC JWT | List the tools with their JSON Schemas. |
 | `POST /mcp` | Bearer API key or OIDC JWT | MCP JSON-RPC (stateless streamable HTTP). |
 | `GET /healthz` | none | Liveness. |
 | `GET /readyz` | none | Readiness: the database answers. |
