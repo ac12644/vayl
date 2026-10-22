@@ -31,7 +31,10 @@ Declaring a slot also carries two properties the rest of the system reads:
                 a value is PROPOSED, not applied, and the current value stands until a human
                 approves. "auto": a clear change applies at once and is marked as auto-applied;
                 only an uncertain one (hedged, negated, future-tense, low confidence, or one that
-                would leave two anticoagulants active) is proposed. VAYL_CONFIRM_MODE overrides
+                would leave two anticoagulants active) is proposed. "earned": "auto" only while the
+                current extractor has earned it on this slot (enough decided changes, few later
+                corrected); until then, and for any new extractor, clear changes are queued and
+                tagged as ones it would have applied. VAYL_CONFIRM_MODE overrides
                 the mode for every gated slot. Reconciliation is driven by an LLM reading
                 conversational text, and "stop the warfarin" appearing in a sentence is not the
                 same as an order to stop it. For most slots being wrong is recoverable; for some
@@ -187,9 +190,10 @@ def _confirm(value, slot):
         return ""
     if value is True or value in ("review", "true"):
         return "review"
-    if value == "auto":
-        return "auto"
-    raise ValueError(f"slot {slot!r}: confirm must be true, false, \"review\" or \"auto\", not {value!r}")
+    if value in ("auto", "earned"):
+        return value
+    raise ValueError(f"slot {slot!r}: confirm must be true, false, \"review\", \"auto\" or \"earned\", "
+                     f"not {value!r}")
 
 
 def from_dict(obj):

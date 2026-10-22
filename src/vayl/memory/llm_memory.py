@@ -546,8 +546,37 @@ if _CONFIRM_MODE not in ("", "auto", "review"):
 
 
 def _gate_mode(spec):
-    """'auto' or 'review' for a gated slot; VAYL_CONFIRM_MODE overrides the slot's own mode."""
+    """'auto', 'review' or 'earned' for a gated slot; VAYL_CONFIRM_MODE overrides the slot's own mode."""
     return _CONFIRM_MODE or getattr(spec, "confirm_mode", "") or "review"
+
+
+# ── earned autonomy: a slot applies changes by itself only once the extractor has earned it ──
+# The evidence is the memory's own later history, with no labelling step: an auto-applied write that a
+# later write REVERSES (back to the exact prior value, or an auto-added item removed / an auto-removed
+# item re-added) within the window, that a later input explicitly CORRECTS, or that someone EDITS, was
+# an error. A later write to some other value is a legitimate change and counts for nothing. Evidence
+# is kept per (slot, extractor), so a new model version starts from zero, in shadow: its clear changes
+# are queued, tagged as ones it would have applied, and a person's approve/reject of those is the
+# evidence that earns the slot back.
+_CORRECTION = re.compile(r"(?<![a-z])(?:actually|correction|that was wrong|was wrong|was a mistake|mistaken|"
+                         r"incorrect(?:ly)?|in error|entered wrong|scratch that|disregard|not right|"
+                         r"(?:is|are|was|were) still|still (?:on|taking|has|uses))(?![a-z])")
+_CORRECTION_WINDOW = env_float("VAYL_CORRECTION_WINDOW_DAYS", 7.0) * 86400
+_EARN_MIN = env_int("VAYL_EARN_MIN", 20)               # decided samples before a slot can earn "auto"
+_EARN_MAX_RATE = env_float("VAYL_EARN_MAX_RATE", 0.05)  # error rate at or below which it keeps it
+
+
+def extractor_id():
+    """Which extractor is writing: VAYL_EXTRACTOR_ID, else provider:model. A change of either is a
+    new extractor, which starts with no earned autonomy."""
+    if os.environ.get("VAYL_EXTRACTOR_ID"):
+        return os.environ["VAYL_EXTRACTOR_ID"]
+    try:
+        p = llm_client._provider()
+    except ValueError:
+        return "unknown"
+    var = {"anthropic": "ANTHROPIC_MODEL", "groq": "GROQ_MODEL", "openai": "OPENAI_MODEL"}[p]
+    return f"{p}:{os.environ.get(var, 'default')}"
 
 
 _SLUG = re.compile(r"[a-z0-9]+(?:[_-][a-z0-9]+)*_[a-z0-9-]+")   # snake_case, no spaces
@@ -738,7 +767,80 @@ class LLMMemory:
         results = [self._apply(o, text, source) for o in llm_extract_classify(text, candidates)]
         results += self._stop_sweep(text, source)
         self._enforce_constraints(before, was)
+        new = [s for s in self.statements if s.id not in before]
+        for s in new:
+            if (s.metadata or {}).get("auto_applied") or (s.metadata or {}).get("would_auto"):
+                s.metadata = {**s.metadata, "extractor": extractor_id()}
+        self._attribute(new, text)
         return results
+
+    # ── earned autonomy ──
+    def _mode(self, spec):
+        """The gate mode in force: an "earned" slot is "auto" while its evidence holds, else "shadow"."""
+        mode = _gate_mode(spec)
+        if mode != "earned":
+            return mode
+        n, errors = self.autonomy(spec.name)
+        return "auto" if n >= _EARN_MIN and errors <= _EARN_MAX_RATE * n else "shadow"
+
+    def autonomy(self, slot, extractor=None):
+        """(decided samples, errors) for `slot` under `extractor` (default: the current one). A sample
+        is an auto-applied write (an error if it was later corrected) or a shadow proposal a person
+        decided (an error if rejected). ponytail: evidence is per memory space; a deployment with many
+        small spaces (one per patient) should pool it across spaces in the store."""
+        ext = extractor or extractor_id()
+        n = errors = 0
+        for s in self.statements:
+            md = s.metadata or {}
+            if md.get("extractor") != ext or SLOT_SCHEMA.canonical(s.subject) != slot:
+                continue
+            if md.get("auto_applied"):
+                n += 1
+                errors += bool(md.get("corrected"))
+            elif md.get("would_auto") and md.get("resolved") in ("confirmed", "rejected"):
+                n += 1
+                errors += md["resolved"] == "rejected"
+        return n, errors
+
+    def _attribute(self, later, text, edit=False):
+        """For each earlier auto-applied write that a write in `later` changes, decide whether the change
+        CORRECTS it (an error of the auto-apply) or is a legitimate later change, and record that on it."""
+        new = {s.id for s in later}
+        for w in later:
+            for a in self._auto_targets(w, new):
+                signal = self._correction(a, w, text, edit)
+                a.metadata = {**a.metadata, **({"corrected": signal, "corrected_by": w.id} if signal
+                                               else {"changed_by": w.id})}
+
+    def _auto_targets(self, w, exclude):
+        """Earlier auto-applied writes that `w` changes: one it replaces or removes, or an auto-removal
+        whose item `w` adds back."""
+        out = []
+        for a in self.statements:
+            md = a.metadata or {}
+            if a.id in exclude or not md.get("auto_applied") or "corrected" in md or "changed_by" in md:
+                continue
+            if w.supersedes == a.id:
+                out.append(a)
+            elif (a.status is Status.HISTORICAL and w.status is Status.ACTIVE and w.subject == a.subject
+                  and _list_identity(w.value) == _list_identity(self._item(a))):
+                out.append(a)
+        return out
+
+    def _correction(self, a, w, text, edit):
+        """The signal that `w` corrects the auto-applied `a`, or None if it is a legitimate change."""
+        if edit:
+            return "edit"
+        if _CORRECTION.search(str(text).lower()):
+            return "language"
+        if a.created_at is not None and time.time() - a.created_at > _CORRECTION_WINDOW:
+            return None                                # long after: the world changed, not the write
+        prior = next((x for x in self.statements if x.id == a.supersedes), None) if a.supersedes else None
+        if a.status is Status.HISTORICAL:              # a was a removal; w adds the item back
+            return "reversal"
+        if prior is None:                              # a added an item; w removes it again
+            return "reversal" if str(w.value).startswith("(retracted") or w.status is Status.HISTORICAL else None
+        return "reversal" if canon(w.value) == canon(prior.value) else None   # back to the exact prior value
 
     def _item(self, s):
         """The list item a statement is about: a removal's tombstone is about what it removed."""
@@ -808,11 +910,12 @@ class LLMMemory:
         """An explicit 'forget X' must RETRACT — retire the fact — rather than depend on the
         extractor's own action guess (which might come back ADD/SUPERSEDE). We reuse the extractor
         only to resolve WHICH fact is meant, then force removal at high confidence."""
-        out = []
+        out, before = [], {s.id for s in self.statements}
         for o in llm_extract_classify(text, retrieval.embed_retrieve(text, self.active(), k=_RECONCILE_CONTEXT)):
             o["action"] = "RETRACT"
             o["confidence"] = max(float(o.get("confidence") or 0), 0.9)
             out.append(self._apply(o, text, source))
+        self._attribute([s for s in self.statements if s.id not in before], text, edit=True)
         return out
 
     def get(self, mid):
@@ -830,7 +933,10 @@ class LLMMemory:
         new = self._mk(old.slot, old.subject, new_value, old.scope,
                         confidence=old.confidence, supersedes=old.id, raw=f"(edit) {new_value}",
                         metadata=old.metadata, source=source or getattr(old, "source", ""))
+        if (old.metadata or {}).get("auto_applied"):
+            new.metadata = {k: v for k, v in old.metadata.items() if k not in ("auto_applied", "extractor")}
         self.statements.append(new)
+        self._attribute([new], new.raw, edit=True)
         return new
 
     def history(self, subject):
@@ -1023,7 +1129,10 @@ class LLMMemory:
                 act = Action.SUPERSEDE   # names an existing item (a dose change) or a single slot's value
             uncertain = (uncertain or conf < AUTO_THRESHOLD or has(text, HYPOTHETICAL_MARKERS)
                          or has(text, SARCASM_MARKERS) or _NEGATED.search(text.lower()) is not None)
-            if _gate_mode(spec) == "auto" and not uncertain and (tgt is not None or new_item):
+            mode = self._mode(spec)
+            shadow = ({"would_auto": True} if mode == "shadow" and not uncertain and (tgt is not None or new_item)
+                      else {})
+            if mode == "auto" and not uncertain and (tgt is not None or new_item):
                 # A clear change on an "auto" slot applies now, below, and is marked auto-applied.
                 target, auto_applied = tgt, True
                 if new_item:
@@ -1035,7 +1144,7 @@ class LLMMemory:
                     return Action.DEDUP, subj, val
                 pend = self._mk(f"{subj}@{scope}", subj, val, scope,
                                 status=Status.FLAGGED, confidence=conf, raw=text, source=source)
-                pend.metadata = {"pending": "ADD", "category": spec.category or ""}
+                pend.metadata = {"pending": "ADD", "category": spec.category or "", **shadow}
                 self.statements.append(pend)
                 return Action.FLAG, subj, val
             elif tgt is not None:
@@ -1051,7 +1160,7 @@ class LLMMemory:
                 pend = self._mk(f"{subj}@{scope}", subj, val, scope,
                                  status=Status.FLAGGED, confidence=conf, raw=text, source=source,
                                  supersedes=tgt.id)
-                pend.metadata = {"pending": act.value, "category": spec.category or ""}
+                pend.metadata = {"pending": act.value, "category": spec.category or "", **shadow}
                 self.statements.append(pend)
                 return Action.FLAG, subj, val
 
@@ -1302,6 +1411,7 @@ class LLMMemory:
             raise ConstraintViolation(f"approving would break {', '.join(c.name for c in bad)}: "
                                       f"{', '.join(items)} would all be current")
         done = {s.id: self._confirm_one(s, source, bool(bad)) for s in members}
+        self._attribute(members, members[0].raw)
         return done[mid]
 
     def _confirm_one(self, st, source, overridden):
