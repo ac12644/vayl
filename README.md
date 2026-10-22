@@ -55,7 +55,26 @@ with Vayl(user_id="cust_5521") as m:
     # No. Acme's account is suspended until payment clears.
 ```
 
-A TypeScript client (`npm i @vayl.dev/client`) and adapters for LangGraph, the OpenAI Agents SDK, CrewAI, the Vercel AI SDK and Mastra are in the [integration docs](https://vayl.gitbook.io/vayl-docs/documentation/integrations/agent-frameworks).
+## Integrations
+
+**Agent frameworks.** Backends plug into the framework's own memory, so facts are stored and recalled on every turn. Tool adapters give the agent memory tools to call.
+
+| Framework | Install | Use |
+|---|---|---|
+| Google ADK | `pip install 'vayl-mcp[adk]'` | `from vayl.integrations.adk import VaylMemoryService` (memory backend) |
+| LlamaIndex | `pip install 'vayl-mcp[llamaindex]'` | `from vayl.integrations.llamaindex import VaylMemory` (memory block) |
+| AutoGen | `pip install 'vayl-mcp[autogen]'` | `from vayl.integrations.autogen import VaylMemory` (memory backend) |
+| LangGraph / LangChain | `pip install 'vayl-mcp[langgraph]'` | `from vayl.integrations.langgraph import VaylMemory` (tools) |
+| OpenAI Agents SDK | `pip install 'vayl-mcp[openai-agents]'` | `from vayl.integrations.openai_agents import VaylMemory` (tools) |
+| CrewAI | `pip install 'vayl-mcp[crewai]'` | `from vayl.integrations.crewai import VaylMemory` (tools) |
+| Pydantic AI | `pip install vayl-mcp 'pydantic-ai-slim[openai,mcp]'` | `MCPToolset` over MCP, no adapter |
+| Agno | `pip install vayl-mcp agno openai` | `MCPTools` over MCP, no adapter |
+| Vercel AI SDK | `npm i @vayl.dev/client ai zod` | `import { vaylTools } from "@vayl.dev/client/vercel"` |
+| Mastra | `npm i @vayl.dev/client @mastra/core zod` | `import { vaylTools } from "@vayl.dev/client/mastra"` |
+
+Examples for each are in [Agent frameworks](https://vayl.gitbook.io/vayl-docs/documentation/integrations/agent-frameworks).
+
+**MCP clients.** Install `vayl-mcp`, then add it to your client: [Claude Code](https://vayl.gitbook.io/vayl-docs/documentation/integrations/claude-code) · [Cursor](https://vayl.gitbook.io/vayl-docs/documentation/integrations/cursor) · [VS Code](https://vayl.gitbook.io/vayl-docs/documentation/integrations/vs-code) · [Windsurf](https://vayl.gitbook.io/vayl-docs/documentation/integrations/windsurf) · [Zed](https://vayl.gitbook.io/vayl-docs/documentation/integrations/zed) · [Cline](https://vayl.gitbook.io/vayl-docs/documentation/integrations/cline) · [Continue](https://vayl.gitbook.io/vayl-docs/documentation/integrations/continue) · [Codex CLI](https://vayl.gitbook.io/vayl-docs/documentation/integrations/codex) · [Gemini CLI](https://vayl.gitbook.io/vayl-docs/documentation/integrations/gemini-cli). For a shared team memory, run [`vayl-server`](https://vayl.gitbook.io/vayl-docs/documentation/guides/deploying-vayl-server) and call it over MCP or [REST](https://vayl.gitbook.io/vayl-docs/api-reference).
 
 ## Documentation
 

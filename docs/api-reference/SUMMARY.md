@@ -7,6 +7,7 @@
 
 ## Tools
 
+* [All tools](tools/all-tools.md)
 * [Memory](tools/memory.md)
 * [Safety and approval](tools/safety-and-approval.md)
 * [Accountability](tools/accountability.md)

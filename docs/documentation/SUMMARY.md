@@ -24,6 +24,13 @@
 * [Integrations](integrations/README.md)
 * [Claude Code](integrations/claude-code.md)
 * [Cursor](integrations/cursor.md)
+* [VS Code](integrations/vs-code.md)
+* [Windsurf](integrations/windsurf.md)
+* [Zed](integrations/zed.md)
+* [Cline](integrations/cline.md)
+* [Continue](integrations/continue.md)
+* [Codex CLI](integrations/codex.md)
+* [Gemini CLI](integrations/gemini-cli.md)
 * [Agent frameworks](integrations/agent-frameworks.md)
 
 ## Guides
