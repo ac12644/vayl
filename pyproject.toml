@@ -52,11 +52,15 @@ pooled = ["urllib3>=2"]
 langgraph = ["langchain-core>=1.5.3", "langchain>=1", "langgraph>=1.2.10"]
 openai-agents = ["openai-agents>=0.1"]      # @function_tool + Agent/Runner
 crewai = ["crewai>=1"]                        # crewai.tools @tool + Agent (v1 memory API)
+adk = ["google-adk>=2.12"]                   # BaseMemoryService backend (vayl.integrations.adk)
+llamaindex = ["llama-index-core>=0.14"]      # BaseMemoryBlock + FunctionTool (vayl.integrations.llamaindex)
+autogen = ["autogen-core>=0.7"]              # autogen_core.memory.Memory (vayl.integrations.autogen)
 # Dev tooling: offline unit tests + lint (what CI runs). langchain-core and openai-agents are here so
 # those adapters' tools are actually exercised in CI (not just skipped). crewai stays out — it's a heavy
 # install (vector DBs, litellm); its tools are verified locally, and an import-safety test guards the
 # module in CI regardless. Framework agent() helpers are thin passthroughs covered by their missing-dep path.
-dev = ["pytest>=8", "ruff>=0.16.1", "mypy>=1.10", "pyyaml>=6", "langchain-core>=1.5.3", "openai-agents>=0.1"]
+dev = ["pytest>=8", "ruff>=0.16.1", "mypy>=1.10", "pyyaml>=6", "langchain-core>=1.5.3", "openai-agents>=0.1",
+       "llama-index-core>=0.14", "autogen-core>=0.7"]
 
 [project.scripts]
 vayl-demo = "vayl.demo:main"                          # zero-setup 30s demo of reconciling memory
@@ -102,3 +106,9 @@ files = ["src/vayl"]
 check_untyped_defs = true
 # optional extras (neo4j, langchain, crewai, …) are not installed in every environment
 ignore_missing_imports = true
+
+# llama-index-core pulls in numpy, whose stubs use 3.12-only syntax; don't analyse those packages
+[[tool.mypy.overrides]]
+module = ["numpy", "numpy.*", "llama_index.*"]
+follow_imports = "skip"
+follow_imports_for_stubs = true

@@ -15,6 +15,14 @@ All notable changes to Vayl are documented here. This project adheres to
   `openapi/vayl-server.yaml` and the API Reference tool pages from the tool registry: one typed
   operation per tool, with its capability, annotations and a real captured example. A test fails if
   the committed spec drifts from the tools.
+- **Memory backends for Google ADK, LlamaIndex and AutoGen.** `vayl.integrations.adk.VaylMemoryService`
+  is an ADK `BaseMemoryService`, `vayl.integrations.llamaindex.VaylMemory(...).block()` is a LlamaIndex
+  memory block, and `vayl.integrations.autogen.VaylMemory` implements autogen-core's `Memory`. They
+  store what the user says through `remember` and put `recall`'s current answer in the model's
+  context before each turn, with no tool call needed. Extras: `[adk]`, `[llamaindex]`, `[autogen]`.
+  AutoGen's `clear()` raises rather than erasing everything.
+- **Setup pages** for VS Code, Windsurf, Zed, Cline, Continue, Codex CLI and Gemini CLI, and tested
+  examples for Pydantic AI and Agno, which connect over MCP with no adapter.
 
 ## [0.9.1] — 2026-10-22
 

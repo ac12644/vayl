@@ -55,7 +55,7 @@ with Vayl(user_id="cust_5521") as m:
     # No. Acme's account is suspended until payment clears.
 ```
 
-A TypeScript client (`npm i @vayl.dev/client`) and adapters for LangGraph, the OpenAI Agents SDK, CrewAI, the Vercel AI SDK and Mastra are in the [integration docs](https://vayl.gitbook.io/vayl-docs/documentation/integrations/agent-frameworks).
+Vayl plugs into Google ADK, LlamaIndex and AutoGen as their memory backend, gives LangGraph, the OpenAI Agents SDK, CrewAI, the Vercel AI SDK and Mastra memory tools, and works over MCP with Pydantic AI, Agno, VS Code, Codex CLI, Gemini CLI and other clients. A TypeScript client is `npm i @vayl.dev/client`. See the [integration docs](https://vayl.gitbook.io/vayl-docs/documentation/integrations/integrations).
 
 ## Documentation
 

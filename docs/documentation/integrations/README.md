@@ -22,7 +22,7 @@ Both expose the same tools. Pick the page for the tool you already use.
 
 ## Agent frameworks and your own code
 
-<table data-view="cards"><thead><tr><th></th><th></th><th data-hidden data-card-target data-type="content-ref"></th></tr></thead><tbody><tr><td><h4><i class="fa-diagram-project" style="color:$primary;">:diagram-project:</i> Agent frameworks</h4></td><td>Memory tools for LangGraph, the OpenAI Agents SDK, CrewAI, the Vercel AI SDK and Mastra.</td><td><a href="agent-frameworks.md">agent-frameworks.md</a></td></tr><tr><td><h4><i class="fa-code" style="color:$primary;">:code:</i> Calling Vayl from code</h4></td><td>The Python and TypeScript clients: call <code>remember</code> and <code>recall</code> as methods.</td><td><a href="../getting-started/calling-vayl-from-code.md">calling-vayl-from-code.md</a></td></tr></tbody></table>
+<table data-view="cards"><thead><tr><th></th><th></th><th data-hidden data-card-target data-type="content-ref"></th></tr></thead><tbody><tr><td><h4><i class="fa-diagram-project" style="color:$primary;">:diagram-project:</i> Agent frameworks</h4></td><td>A memory backend for Google ADK, LlamaIndex and AutoGen; tools for LangGraph, the OpenAI Agents SDK, CrewAI, the Vercel AI SDK and Mastra; MCP for Pydantic AI and Agno.</td><td><a href="agent-frameworks.md">agent-frameworks.md</a></td></tr><tr><td><h4><i class="fa-code" style="color:$primary;">:code:</i> Calling Vayl from code</h4></td><td>The Python and TypeScript clients: call <code>remember</code> and <code>recall</code> as methods.</td><td><a href="../getting-started/calling-vayl-from-code.md">calling-vayl-from-code.md</a></td></tr></tbody></table>
 
 ## Shared team memory
 

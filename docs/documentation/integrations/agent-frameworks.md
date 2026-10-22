@@ -1,12 +1,16 @@
 ---
 description: >-
-  Give your existing agent reconciling memory: in LangGraph, the OpenAI Agents
-  SDK, CrewAI, the Vercel AI SDK, or Mastra.
+  Give your existing agent reconciling memory: as a memory backend for Google
+  ADK, LlamaIndex and AutoGen, as tools for LangGraph, the OpenAI Agents SDK,
+  CrewAI, the Vercel AI SDK and Mastra, or over MCP for Pydantic AI and Agno.
 ---
 
 # Agent frameworks
 
-Add Vayl to an agent you already build with a framework, and its memory stops going stale. Each adapter gives your agent five memory tools, `remember`, `recall`, `history`, `forget` and `list_memories`, and the agent decides when to call them.
+Add Vayl to an agent you already build with a framework, and its memory stops going stale. There are two kinds of integration:
+
+* **Memory backends** (Google ADK, LlamaIndex, AutoGen) plug into the framework's own memory slot. What the user says is stored, and current facts reach the model before each turn, without the agent deciding to call anything.
+* **Tool adapters** (LangGraph, the OpenAI Agents SDK, CrewAI, the Vercel AI SDK, Mastra) give the agent five memory tools, `remember`, `recall`, `history`, `forget` and `list_memories`, and the agent decides when to call them. Pydantic AI and Agno get the same tools directly over MCP, with no adapter.
 
 Because Vayl reconciles, the agent is never handed a fact and its replacement as if both were current:
 
@@ -31,6 +35,11 @@ Every adapter has the same shape: bind a memory to a [memory space](../core-conc
 | LangGraph / LangChain | Python | `pip install 'vayl-mcp[langgraph]'` | `from vayl.integrations.langgraph import VaylMemory` |
 | OpenAI Agents SDK | Python | `pip install 'vayl-mcp[openai-agents]'` | `from vayl.integrations.openai_agents import VaylMemory` |
 | CrewAI | Python | `pip install 'vayl-mcp[crewai]'` | `from vayl.integrations.crewai import VaylMemory` |
+| Google ADK | Python | `pip install 'vayl-mcp[adk]'` | `from vayl.integrations.adk import VaylMemoryService` |
+| LlamaIndex | Python | `pip install 'vayl-mcp[llamaindex]'` | `from vayl.integrations.llamaindex import VaylMemory` |
+| AutoGen | Python | `pip install 'vayl-mcp[autogen]'` | `from vayl.integrations.autogen import VaylMemory` |
+| Pydantic AI | Python | `pip install vayl-mcp 'pydantic-ai-slim[openai,mcp]'` | `from pydantic_ai.mcp import MCPToolset` (no adapter) |
+| Agno | Python | `pip install vayl-mcp agno openai` | `from agno.tools.mcp import MCPTools` (no adapter) |
 | Vercel AI SDK | TypeScript | `npm i @vayl.dev/client ai zod @ai-sdk/openai` | `import { vaylTools } from "@vayl.dev/client/vercel"` |
 | Mastra | TypeScript | `npm i @vayl.dev/client @mastra/core zod` | `import { vaylTools } from "@vayl.dev/client/mastra"` |
 
@@ -125,6 +134,136 @@ In every Python adapter:
 * `VaylMemory(url="https://your-host/mcp", api_key="vayl_sk_...", user_id=...)` connects to a team server instead of starting `vayl-mcp`.
 * `VaylMemory(client=existing_vayl_client)` reuses a connection you already opened; the adapter then leaves closing it to you.
 
+## Memory backends
+
+{% tabs %}
+{% tab title="Google ADK" %}
+`VaylMemoryService` is an ADK `BaseMemoryService`. Pass it to your `Runner`, and ADK's `load_memory` tool and your own `search_memory` calls answer from Vayl:
+
+```python
+from google.adk.runners import Runner
+from vayl.integrations.adk import VaylMemoryService
+
+memory = VaylMemoryService()          # starts vayl-mcp; or url=..., api_key=... for a team server
+runner = Runner(agent=agent, app_name="support", session_service=sessions, memory_service=memory)
+
+# after a conversation:
+await memory.add_session_to_memory(session)
+
+found = await memory.search_memory(app_name="support", user_id="cust_5521", query="What plan is Acme on?")
+print(found.memories[0].content.parts[0].text)   # Acme is on the Pro plan.
+```
+
+* Only what the **user** said is stored: the agent's own replies are the model's words, not facts. Pass `include_agent=True` to store them too.
+* Adding the same session again stores nothing twice, so you can call `add_session_to_memory` after every turn.
+* `add_events_to_memory` (a delta) and `add_memory` (explicit entries) work too.
+* ADK's `user_id` is Vayl's `user_id`, and its `app_name` is Vayl's `agent_id`.
+{% endtab %}
+
+{% tab title="LlamaIndex" %}
+`VaylMemory(...).block()` is a memory block for LlamaIndex's `Memory`:
+
+```python
+from llama_index.core.memory import Memory
+from vayl.integrations.llamaindex import VaylMemory
+
+vayl = VaylMemory(user_id="cust_5521")
+memory = Memory.from_defaults(session_id="support-42", memory_blocks=[vayl.block()])
+
+response = await agent.run("What plan is Acme on?", memory=memory)
+```
+
+Messages that leave short-term memory are stored through `remember`. Before each turn the block asks `recall` about the latest user message, and LlamaIndex puts the answer in the prompt:
+
+```
+<memory>
+<vayl>
+Acme is on the Pro plan.
+</vayl>
+</memory>
+```
+
+The block has priority `0`, so LlamaIndex never truncates it. `vayl.tools()` also gives the agent explicit memory tools, as `FunctionTool`s.
+{% endtab %}
+
+{% tab title="AutoGen" %}
+`VaylMemory` implements autogen-core's `Memory`:
+
+```python
+from autogen_agentchat.agents import AssistantAgent
+from autogen_core.memory import MemoryContent, MemoryMimeType
+from vayl.integrations.autogen import VaylMemory
+
+memory = VaylMemory(user_id="cust_5521")
+await memory.add(MemoryContent(content="Acme downgraded to the Pro plan this morning.",
+                               mime_type=MemoryMimeType.TEXT))
+
+agent = AssistantAgent("support", model_client=model_client, memory=[memory])
+```
+
+Before each model call the agent runs `update_context`, which asks `recall` about the latest user message and adds a system message:
+
+```
+From long-term memory (current facts): Acme is on the Pro plan.
+```
+
+`add` is `remember` and `query` is `recall`. `clear()` raises instead of erasing every fact, because that is `delete_all`: irreversible, with an erasure receipt. Call `memory.client.call("delete_all")` if you mean it.
+{% endtab %}
+{% endtabs %}
+
+## Frameworks with MCP support
+
+Pydantic AI and Agno connect to MCP servers themselves, so they use Vayl's tools with no adapter.
+
+{% tabs %}
+{% tab title="Pydantic AI" %}
+```python
+import os
+from fastmcp.client.transports import StdioTransport
+from pydantic_ai import Agent
+from pydantic_ai.mcp import MCPToolset
+
+vayl = MCPToolset(
+    StdioTransport(command="vayl-mcp", args=[], env={
+        "LLM_PROVIDER": "openai", "OPENAI_API_KEY": os.environ["OPENAI_API_KEY"],
+        "VAYL_DB": "/absolute/path/to/vayl.db"}),
+    include_instructions=True,
+)
+agent = Agent("openai:gpt-5-mini", toolsets=[vayl])
+
+async with agent:
+    await agent.run("Remember: Acme Corp is on the Enterprise plan.")
+    await agent.run("Acme downgraded to the Pro plan this morning.")
+    print((await agent.run("What plan was Acme on before?")).output)
+```
+
+`include_instructions=True` passes Vayl's server instructions to the model, which tell it when to call `remember` and `recall`, and to set `include_history` for questions about the past. For a team server, pass its URL instead: `MCPToolset("https://your-host/mcp", headers={"Authorization": "Bearer vayl_sk_..."})`.
+{% endtab %}
+
+{% tab title="Agno" %}
+```python
+import os
+from agno.agent import Agent
+from agno.models.openai import OpenAIResponses
+from agno.tools.mcp import MCPTools
+
+async with MCPTools(command="vayl-mcp", env={
+        "LLM_PROVIDER": "openai", "OPENAI_API_KEY": os.environ["OPENAI_API_KEY"],
+        "PATH": os.environ["PATH"], "VAYL_DB": "/absolute/path/to/vayl.db"}) as vayl:
+    agent = Agent(model=OpenAIResponses(id="gpt-5-mini"), tools=[vayl])
+    await agent.arun("Remember: Acme Corp is on the Enterprise plan.")
+```
+
+Pass `PATH` in `env` so Agno can find `vayl-mcp`. With gpt-6 models, use `OpenAIResponses`: `OpenAIChat` sends a setting those models reject together with tools.
+{% endtab %}
+{% endtabs %}
+
+Ask one question at a time. "What plan is Acme on, and what was it before?" can come back as "I don't know", because one `recall` can't answer about the present and the past at once; asked separately, both are answered.
+
+{% hint style="info" %}
+**How these were checked:** each was run against a real `vayl-mcp` with `gpt-6-luna`, using Google ADK 2.12, LlamaIndex 0.14, AutoGen 0.7, Pydantic AI 2.59 and Agno 3.1, through the store-a-plan, change-it, ask-now, ask-before sequence. The ADK, LlamaIndex and AutoGen backends also have offline tests in `tests/test_memory_backends.py`.
+{% endhint %}
+
 ## TypeScript
 
 {% tabs %}
@@ -185,7 +324,7 @@ const agent = new Agent({
 
 ## Framework memory and Vayl together
 
-Each of these frameworks has its own memory or store, and those accumulate what you write. Vayl reconciles, and keeps an auditable history. Use the framework's store for raw conversation history, and Vayl for the durable facts the agent must keep current.
+Each tool-adapter framework has its own memory or store, and those accumulate what you write. Vayl reconciles, and keeps an auditable history. Use the framework's store for raw conversation history, and Vayl for the durable facts the agent must keep current.
 
 ## Next steps
 
