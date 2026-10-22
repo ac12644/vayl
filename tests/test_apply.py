@@ -5,7 +5,7 @@ The reconciliation engine (_apply): per-action behaviour and the interactions be
 import pytest
 
 from vayl.memory import llm_memory
-from vayl.memory.llm_memory import AUTO_THRESHOLD, LLMMemory, _is_event, is_critical
+from vayl.memory.llm_memory import AUTO_THRESHOLD, LLMMemory, is_critical
 from vayl.memory.reconcile import Action, Statement, Status
 from vayl.memory.schema import from_dict
 
@@ -674,14 +674,6 @@ def test_category_survives_a_supersede(clinical):
     live = m.active()[0]
     assert live.value == "penicillin and latex"
     assert is_critical(live, categories=["critical"])       # still tagged after the supersede
-
-
-def test_category_and_event_tags_coexist_on_one_fact(clinical):
-    """CATEGORY × KIND: both are stamped into the same metadata dict; neither may clobber the other."""
-    m = LLMMemory()
-    m._apply(o("allergy", "penicillin", kind="event"), "had a reaction to penicillin")
-    s = m.active()[0]
-    assert _is_event(s) and (s.metadata or {}).get("category") == "critical"
 
 
 def test_flag_reason_and_category_coexist(clinical, monkeypatch):

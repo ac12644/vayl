@@ -61,11 +61,6 @@ def test_space_lock_is_a_real_per_key_mutex_on_sqlite(tmp_path):
     assert d._locks["A"] is d._locks.setdefault("A", object())
 
 
-@pytest.mark.skip(reason="requires a live Postgres — run with docker-compose `postgres` + VAYL_DATABASE_URL")
-def test_postgres_path_placeholder():
-    pass
-
-
 def test_add_column_if_missing_tolerates_reruns_but_surfaces_real_errors(tmp_path):
     import sqlite3
 
