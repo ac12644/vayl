@@ -5,17 +5,23 @@ name: release
 # workflow identity. Configure the trusted publisher once at
 # https://pypi.org/manage/project/vayl-mcp/settings/publishing/
 # (owner: ac12644, repo: vayl, workflow: release.yml, environment: pypi).
+#
+# After PyPI, the `registry` job publishes server.json to the official MCP Registry with GitHub
+# OIDC (no stored token). Run it alone from the Actions tab (workflow_dispatch) to re-publish
+# the version on main, e.g. if the registry step failed.
 
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   build:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -57,3 +63,42 @@ jobs:
           path: dist/
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+
+  registry:
+    needs: publish
+    # on a tag: after PyPI succeeds; on workflow_dispatch: alone (build/publish are skipped)
+    if: always() && (needs.publish.result == 'success' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # OIDC token for the MCP Registry
+    env:
+      PUBLISHER_URL: https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz
+      PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: server.json must match the package version
+        run: |
+          pkg=$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)
+          for v in $(python3 -c "import json; d=json.load(open('server.json')); print(d['version'], *[p['version'] for p in d['packages']])"); do
+            test "$v" = "$pkg" || { echo "::error::server.json has $v, pyproject has $pkg"; exit 1; }
+          done
+          if [ "${GITHUB_EVENT_NAME}" = push ]; then test "${GITHUB_REF_NAME#v}" = "$pkg"; fi
+          echo "version=$pkg" >> "$GITHUB_ENV"
+      - name: Wait until PyPI serves this version
+        run: |
+          # the registry checks the PyPI description for the mcp-name line; PyPI's index lags uploads
+          for i in $(seq 1 30); do
+            curl -fsS "https://pypi.org/simple/vayl-mcp/" | grep -q "vayl_mcp-${version}" && exit 0
+            sleep 10
+          done
+          echo "::error::PyPI never served vayl-mcp ${version}"; exit 1
+      - name: Install mcp-publisher (pinned, checksum verified)
+        run: |
+          curl -fsSL "$PUBLISHER_URL" -o mcp-publisher.tar.gz
+          echo "$PUBLISHER_SHA256  mcp-publisher.tar.gz" | sha256sum -c -
+          tar xzf mcp-publisher.tar.gz mcp-publisher
+      - name: Publish to the MCP Registry
+        run: |
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
