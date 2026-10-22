@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vayl-mcp"
-version = "0.9.1"
+version = "0.10.0"
 description = "The reconciling memory layer for AI agents, over MCP: when a fact changes, the old value is retired and kept in history."
 readme = "README.md"
 requires-python = ">=3.11"

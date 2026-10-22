@@ -3,7 +3,7 @@
 openapi: 3.1.0
 info:
   title: Vayl HTTP API
-  version: 0.9.1
+  version: 0.10.0
   summary: The routes served by vayl-server, the authenticated team transport for Vayl.
   description: "`vayl-server` serves Vayl's 32 tools two ways, with the same authentication and checks:\n\n- **REST:**\
     \ `POST /v1/tools/{name}` with the tool's arguments as a JSON object, returning\n  `{\"result\": \"...\"}`.\
@@ -132,7 +132,7 @@ paths:
         '200':
           description: 'A server-sent-events stream. Its `data:` line is the JSON-RPC response. Captured from
 
-            vayl-server 0.9.1.
+            vayl-server 0.10.0.
 
             '
           headers:
@@ -146,7 +146,7 @@ paths:
                 initialize:
                   summary: initialize
                   value: 'data: {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18", "capabilities":{"logging":{},"prompts":{"listChanged":true},
-                    "resources":{"subscribe":false,"listChanged":true},"tools":{"listChanged":true}}, "serverInfo":{"name":"vayl","version":"0.9.1"},
+                    "resources":{"subscribe":false,"listChanged":true},"tools":{"listChanged":true}}, "serverInfo":{"name":"vayl","version":"0.10.0"},
                     "instructions":"Vayl is persistent, reconciling memory. When the user asks you to remember,
                     note or keep track of something, or states a fact or a change to one (a decision, a preference,
                     a dose, an account setting, ''we switched to X''), call `remember` with one plain sentence:

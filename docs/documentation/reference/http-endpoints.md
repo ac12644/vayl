@@ -58,7 +58,7 @@ Authorization beyond that (capability and scope) happens inside the tool and com
 
 ## Call a tool with curl
 
-This session was run against a real `vayl-server` 0.9.1 on a temporary database, with the key redacted.
+This session was run against a real `vayl-server` 0.10.0 on a temporary database, with the key redacted.
 
 {% stepper %}
 {% step %}
@@ -108,7 +108,7 @@ x-request-id: docs-demo-1
 Transfer-Encoding: chunked
 
 event: message
-data: {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18","capabilities":{"logging":{},"prompts":{"listChanged":true},"resources":{"subscribe":false,"listChanged":true},"tools":{"listChanged":true}},"serverInfo":{"name":"vayl","version":"0.9.1"},"instructions":"Vayl is persistent, reconciling memory. When the user asks you to remember, note or keep track of something, or states a fact or a change to one (a decision, a preference, a dose, an account setting, 'we switched to X'), call `remember` with one plain sentence: Vayl retires the old value instead of keeping both, which a notes file cannot do. Before answering from what you were told earlier (a project's stack, a customer's plan, a patient's current medication), call `recall`, with include_history=true for 'what was it before?'. Use `forget` when something is no longer true and has no replacement. If recall doesn't know, say so instead of guessing."}}
+data: {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18","capabilities":{"logging":{},"prompts":{"listChanged":true},"resources":{"subscribe":false,"listChanged":true},"tools":{"listChanged":true}},"serverInfo":{"name":"vayl","version":"0.10.0"},"instructions":"Vayl is persistent, reconciling memory. When the user asks you to remember, note or keep track of something, or states a fact or a change to one (a decision, a preference, a dose, an account setting, 'we switched to X'), call `remember` with one plain sentence: Vayl retires the old value instead of keeping both, which a notes file cannot do. Before answering from what you were told earlier (a project's stack, a customer's plan, a patient's current medication), call `recall`, with include_history=true for 'what was it before?'. Use `forget` when something is no longer true and has no replacement. If recall doesn't know, say so instead of guessing."}}
 ```
 
 `serverInfo.version` is Vayl's version, the same as `vayl-server --version` prints. `instructions` is the guidance Vayl gives the client about when to call its tools; Claude Code shows it to the model. Because the server is stateless, you can call `tools/list` or `tools/call` without initializing first.

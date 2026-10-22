@@ -29,7 +29,7 @@ vayl-mcp --version
 ```
 
 ```
-vayl-mcp 0.9.1
+vayl-mcp 0.10.0
 ```
 
 Optional extras:
