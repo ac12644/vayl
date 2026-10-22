@@ -68,3 +68,25 @@ Reproduce:
 OPENAI_API_KEY=... OPENAI_MODEL=gpt-6-luna python -m benchmarks.evaluations.med_change_safety --trials 20
 OPENAI_API_KEY=... OPENAI_MODEL=gpt-6-luna python -m benchmarks.evaluations.med_change_safety --holdout --trials 20
 ```
+
+## Automatic mode (`"confirm": "auto"`), tested by replay
+
+The clinical preset now puts medications on `"auto"`: a clear change applies by itself, and only an uncertain one waits for a person. It was tested by **replaying recorded model outputs**, not by new model calls (the OpenAI account ran out of credits): `benchmarks/evaluations/med_change_replay.py` rebuilds what gpt-6-luna, gpt-5-mini and gpt-6-sol actually returned for each phrasing in the runs above, weights each shape by how often it was seen, and feeds it through the engine with the model call skipped. Seven new risk phrasings (negation, "continue X, stop Y", two stops in one sentence, a plan, a restart, a question) were never sent to a model, so they use worst-case outputs: the model doing the most dangerous thing.
+
+| Replay (2,048 weighted trials) | Unsafe | Wrong | Applied automatically | Queued | Lost | Correctly unchanged |
+| --- | --- | --- | --- | --- | --- | --- |
+| `auto` (preset default) | 0 | 0 | 1,553 | 216 | 0 | 279 |
+| `review` (`VAYL_CONFIRM_MODE=review`) | 0 | 0 | 0 | 1,769 | 0 | 279 |
+
+In `auto`, **97.7% of medication changes applied with no one involved** (1,553 of 1,589). The 36 still queued are future-tense orders and switches or stops where the model missed half, which the sentence check caught. The other 180 queued are code-status changes, which stay on `"review"` by design.
+
+The first replay of `auto` found 50 unsafe outcomes that review mode had been hiding, all now fixed and covered by tests: hold notes written over a drug's entry or added as a fake drug ("Metformin held for contrast"), a drug removed although the sentence said to continue it, a two-drug stop stored as one entry, a negated switch queued for approval, and a dose change that broke the drug's name for later matches ("metformin to 1000 mg").
+
+**Latency:** Vayl's own processing is 0.07 ms per `remember` (1.9 ms at most). The model call is 2.1 s at p50 and 3.0 s at p95 for gpt-6-luna, so the model sets the latency.
+
+**What replay doesn't show:** how often a model produces each shape on new text, or how it handles the risk phrasings. Re-run `med_change_safety.py` with `--risk`, `--holdout` and the main set when credits are available.
+
+```bash
+python -m benchmarks.evaluations.med_change_replay                          # auto, no API key needed
+VAYL_CONFIRM_MODE=review python -m benchmarks.evaluations.med_change_replay
+```

@@ -488,7 +488,13 @@ def _ctx_line(s):
     return f'{line} ("{raw[:300]}")' if raw else line
 
 
-_LIST_ID_CUT = re.compile(r"\s+[—–-]\s+|\s\d")
+_LIST_ID_CUT = re.compile(r"\s+[—–-]\s+|\s\d|[;,]")
+_PAREN = re.compile(r"\s*\([^)]*\)")
+_TRAILING = re.compile(r"(?:\s+(?:to|at|from|by|now|increased|decreased|reduced|raised|lowered))+$")
+# A hold, a continue or a keep is not a change: per FHIR a held drug is still an active medication
+# ("on-hold"), and "continue warfarin" says it stays. On a gated list such a value is never an entry.
+_NO_CHANGE = re.compile(r"(?<![a-z])(?:hold|held|holding|on hold|pause[ds]?|paused|suspend(?:ed)?|continue[ds]?"
+                        r"|continuing|keep|keeping|remain on|stay on|restart(?:ed)?|resume[ds]?)(?![a-z])")
 # Clinical stop language. Not "hold": a hold is a pause expected to resume (FHIR "on-hold").
 _STOP_WORDS = re.compile(r"(?<![a-z])(?:stop|stopped|stopping|discontinue|discontinued|d/c(?:'?d)?|dc'?(?:e?d)"
                          r"|cease|ceased|taken off|came off|come off|(?:been|is|was|went|now) off|off since"
@@ -516,7 +522,7 @@ def _action(raw):
 
 
 _SWITCH_FROM = r"(?:switch(?:ed|ing)?|chang(?:e|ed|ing)|transition(?:ed|ing)?|convert(?:ed|ing)?)\s+(?:[a-z']+\s+){0,2}from\s+"
-_STOP_PHRASE = (r"(?:stop|stopped|stopping|discontinue|discontinued|d/c(?:'?d)?|dc'?(?:e?d)|ceased|taken off"
+_STOP_PHRASE = (r"(?:stop|stopped|stopping|discontinue|discontinued|d/c(?:'?d)?|dc'?(?:e?d)|cease|ceased|taken off"
                 r"|came off|come off|(?:been|is|was|went|now|stays?) off|no longer (?:taking|on)|instead of)")
 
 
@@ -547,6 +553,13 @@ def _gate_mode(spec):
 _SLUG = re.compile(r"[a-z0-9]+(?:[_-][a-z0-9]+)*_[a-z0-9-]+")   # snake_case, no spaces
 
 
+def _kept(text, ident):
+    """True if `text` says to continue / keep the drug `ident` ("Continue warfarin, stop metformin")."""
+    d = "(?:" + "|".join(re.escape(n) for n in sorted(_names_for(ident))) + ")"
+    return re.search(rf"(?<![a-z])(?:continue|keep|remain on|stay on|resume|restart)\s+(?:[a-z']+\s+){{0,2}}{d}(?![a-z])",
+                     str(text).lower()) is not None
+
+
 def _names_item(text, item_value):
     """True if `text` names the list item `item_value` by its identity (the drug or substance name)."""
     ident = _list_identity(item_value)
@@ -563,9 +576,10 @@ def _list_identity(value):
     Cutting at the first separator or dose number yields "penicillin" / "warfarin", so a removal or
     change finds the right list member even when the description text differs.
     """
-    v = str(value or "")
+    v = _PAREN.sub("", str(value or ""))
     m = _LIST_ID_CUT.search(v)
     ident = (v[:m.start()] if m else v).strip().lower()
+    ident = _TRAILING.sub("", ident).strip()          # "metformin to 1000 mg" -> metformin
     return _GENERIC.get(ident, ident)
 
 
@@ -834,6 +848,9 @@ class LLMMemory:
             named = [s for s in self.active() if s.subject == subj and _names_item(val, s.value)]
             if len(named) == 1:
                 act, target, is_event = Action.RETRACT, named[0], False
+            elif len(named) > 1 and act != Action.RETRACT:
+                # "Stop warfarin and metformin." as ONE value: not an entry. _stop_sweep proposes each.
+                return Action.SKIP, subj, val
             elif not named and act != Action.RETRACT:
                 # "off since 2026-03", "reason_discontinued: AKI": a stop statement that names no current
                 # item is not a list entry. The stop itself is caught by name in _stop_sweep.
@@ -934,6 +951,24 @@ class LLMMemory:
                 and act in (Action.ADD, Action.COEXIST, Action.SUPERSEDE, Action.REFINE)
                 and _SLUG.fullmatch(val.strip().lower())):
             return Action.SKIP, subj, val
+
+        # Hold / continue / keep values, negated changes, and removing a drug the sentence continues:
+        # none of these is a change to a gated list, in either mode. Skipping keeps the drug as it is.
+        if (spec is not None and spec.confirm and is_multi and str(source or "").lower() not in _TRUSTED_SOURCES
+                and act in (Action.ADD, Action.COEXIST, Action.SUPERSEDE, Action.REFINE, Action.RETRACT)):
+            if act != Action.RETRACT and _NO_CHANGE.search(val.lower()):
+                return Action.SKIP, subj, val
+            if _NEGATED.search(text.lower()):
+                return Action.SKIP, subj, val
+            if act == Action.RETRACT:
+                kept = target or _slot_target(self.active(), subj, val, is_multi)
+                if kept is not None and _kept(text, _list_identity(kept.value)):
+                    return Action.SKIP, subj, val
+        # A restatement with a note ("metformin 500 mg twice daily (restarted)") is not a change.
+        if (spec is not None and spec.confirm and act in (Action.ADD, Action.SUPERSEDE, Action.REFINE)
+                and any(s.subject == subj and canon(_PAREN.sub("", s.value)) == canon(_PAREN.sub("", val))
+                        for s in self.active())):
+            return Action.DEDUP, subj, val
 
         # An ADD to a gated slot that already holds a value is a change too: on a list it adds a drug
         # (and, beside a pending stop, can leave two anticoagulants active); on a single slot the

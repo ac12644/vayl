@@ -39,6 +39,9 @@ All notable changes to Vayl are documented here. This project adheres to
   active (the new drug then waits with its stop, so a switch applies whole or not at all). The
   clinical preset now puts `active_medication` on `"auto"` and keeps `code_status` on `"review"`.
   `"confirm": true` still means review. `VAYL_CONFIRM_MODE=review|auto` overrides every gated slot.
+  Tested by replaying 2,048 recorded model outputs (`benchmarks/evaluations/med_change_replay.py`):
+  97.7% of medication changes applied automatically, none unsafe; holds, "continue" and negated
+  changes never alter the record.
 - `pending_changes` and `confirm_change` warn when approving a proposal would leave two
   anticoagulants current. Common anticoagulant brand names (Coumadin, Eliquis, Xarelto, Pradaxa,
   Savaysa, Lovenox) match their generic names.

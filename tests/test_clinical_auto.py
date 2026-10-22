@@ -124,3 +124,44 @@ def test_an_invalid_confirm_mode_is_rejected():
     from vayl.memory.schema import from_dict
     with pytest.raises(ValueError, match="confirm must be"):
         from_dict({"slots": [{"name": "x", "confirm": "sometimes"}]})
+
+
+# ── found by replaying recorded model outputs (benchmarks/evaluations/med_change_replay.py) ──
+
+@pytest.mark.parametrize("text, facts", [
+    ("Hold metformin tonight before the CT scan.",
+     [{"action": "ADD", "subject": MED, "value": "metformin 500 mg twice daily — hold tonight before CT scan"}]),
+    ("Hold metformin tonight before the CT scan.", [{"action": "ADD", "subject": MED, "value": "hold metformin tonight before the CT scan"}]),
+    ("Metformin held for contrast, resume in 48h.", [{"action": "ADD", "subject": MED, "value": "Metformin held for contrast"}]),
+    ("Restart metformin 500 mg twice daily.",
+     [{"action": "SUPERSEDE", "subject": MED, "value": "metformin 500 mg twice daily (restarted)", "target_id": 2}]),
+    ("Continue warfarin, stop metformin.", [{"action": "RETRACT", "subject": MED, "value": "warfarin 5 mg daily", "target_id": 1},
+                                           {"action": "RETRACT", "subject": MED, "value": "metformin 500 mg twice daily", "target_id": 2}]),
+    ("Continue warfarin, stop metformin.", [{"action": "RETRACT", "subject": MED, "value": "metformin 500 mg twice daily", "target_id": 2},
+                                           {"action": "ADD", "subject": MED, "value": "warfarin (continue)"}]),
+    ("Don't switch her to apixaban yet.", [{"action": "SUPERSEDE", "subject": MED, "value": "apixaban 5 mg BID", "target_id": 1}]),
+])
+def test_holds_keeps_and_negations_never_change_or_queue_the_wrong_drug(monkeypatch, text, facts):
+    m = _chart()
+    _say(m, monkeypatch, text, *facts)
+    meds = _meds(m)
+    assert "warfarin 5 mg daily" in meds                               # never removed or rewritten
+    assert all("hold" not in v.lower() and "held" not in v.lower() and "(" not in v for v in meds)
+    assert not [p for p in m.pending() if "warfarin" in p.value.lower() or p.supersedes == 1]
+    if "stop metformin" in text.lower():
+        assert "metformin 500 mg twice daily" not in meds              # the real stop still applies
+
+
+def test_a_stop_naming_two_drugs_queues_both_instead_of_storing_the_sentence(monkeypatch):
+    m = _chart()
+    _say(m, monkeypatch, "Stop warfarin and metformin.", {"action": "ADD", "subject": MED, "value": "Stop warfarin and metformin."})
+    assert _meds(m) == ["metformin 500 mg twice daily", "warfarin 5 mg daily"]
+    assert sorted(p.supersedes for p in m.pending()) == [1, 2]
+
+
+def test_a_dose_change_keeps_the_drug_name_findable(monkeypatch):
+    m = _chart()
+    _say(m, monkeypatch, "Increase metformin to 1000 mg twice daily.",
+         {"action": "SUPERSEDE", "subject": MED, "value": "metformin to 1000 mg twice daily", "target_id": 2})
+    _say(m, monkeypatch, "Stop metformin.", {"action": "RETRACT", "subject": MED, "value": "metformin"})
+    assert _meds(m) == ["warfarin 5 mg daily"]                         # the later stop found it

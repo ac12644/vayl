@@ -359,12 +359,12 @@ def test_a_targeted_change_under_an_invented_subject_still_goes_through_the_gate
     """gpt-5-mini, 'Metformin held for contrast': SUPERSEDE metformin_therapy_status (target_id=2)
     retired metformin, and REFINE 'metformin 500 mg twice daily' (target_id=2) overwrote its value,
     both without approval, because the gate keyed on the invented subject."""
-    for fact in ({"action": "SUPERSEDE", "subject": "metformin_therapy_status", "value": "metformin held for contrast",
+    for fact in ({"action": "SUPERSEDE", "subject": "metformin_therapy_status", "value": "metformin 1000 mg twice daily",
                   "target_id": 2},
-                 {"action": "REFINE", "subject": "metformin 500 mg twice daily", "value": "metformin held for contrast",
+                 {"action": "REFINE", "subject": "metformin 500 mg twice daily", "value": "metformin 1000 mg twice daily",
                   "target_id": 2}):
         m = _chart()
-        _add(m, "Metformin held for contrast, resume in 48h.", [fact], monkeypatch)
+        _add(m, "Increase metformin to 1000 mg twice daily.", [fact], monkeypatch)
         assert "metformin 500 mg twice daily" in _current_meds(m)
         assert all((p.metadata or {}).get("pending") for p in m.pending()) and m.pending()
 
