@@ -1,0 +1,365 @@
+openapi: 3.1.0
+info:
+  title: Vayl HTTP API
+  version: 0.9.1
+  summary: The routes served by vayl-server, the authenticated team transport for Vayl.
+  description: |
+    `vayl-server` serves Vayl's 32 tools two ways, with the same authentication and checks:
+
+    - **REST:** `POST /v1/tools/{name}` with the tool's arguments as a JSON object, returning
+      `{"result": "..."}`. One operation per tool below. `GET /v1/tools` lists them with their schemas.
+    - **MCP:** JSON-RPC 2.0 over the Model Context Protocol's streamable HTTP transport at `POST /mcp`,
+      for MCP clients and agent frameworks.
+
+    It also serves unauthenticated health probes and a Prometheus endpoint.
+
+    - **Auth:** every `/mcp` request needs `Authorization: Bearer <credential>`, either an API key
+      (`vayl_sk_…`, created with the `create_principal` tool) or, with an Enterprise license granting
+      `sso`, an OIDC ID token from your identity provider.
+    - **TLS:** `vayl-server` speaks plain HTTP. Terminate TLS at a reverse proxy or ingress.
+    - **Limits:** request bodies are capped at `VAYL_MAX_BODY` (default 1 MiB) and each client IP is
+      limited to `VAYL_RATE_PER_MIN` requests per minute (default 120, per process; `0` disables it).
+    - **Request IDs:** every response carries `X-Request-ID`. A plain incoming `X-Request-ID`
+      (1–64 characters of `A-Z a-z 0-9 . _ : -`) is reused; otherwise one is generated.
+  license:
+    name: Apache-2.0
+    url: https://github.com/ac12644/vayl/blob/main/LICENSE
+externalDocs:
+  description: Vayl documentation
+  url: https://vayl.gitbook.io/vayl-docs/documentation
+servers:
+  - url: http://127.0.0.1:8080
+    description: Default bind address (VAYL_HOST / VAYL_PORT). Put TLS in front for anything but local use.
+tags:
+  - name: Tools
+    description: Discover the tools over REST.
+  - name: MCP
+    description: The Model Context Protocol endpoint your agents connect to.
+  - name: Health
+    description: Unauthenticated liveness and readiness probes for load balancers and Kubernetes.
+  - name: Monitoring
+    description: Prometheus metrics.
+paths:
+  /mcp:
+    post:
+      tags: [MCP]
+      operationId: mcp
+      summary: Send an MCP JSON-RPC request
+      description: |
+        Sends one JSON-RPC 2.0 message over MCP streamable HTTP. The server is **stateless**: no
+        session ID is issued, so every request stands alone.
+
+        Common methods: `initialize`, `tools/list` (returns the 32 Vayl tools with their JSON Schemas
+        and annotations), and `tools/call` (runs one tool). The response is a server-sent-events
+        stream whose `data:` line carries the JSON-RPC response.
+
+        A tool that is denied or fails still returns HTTP 200: the result text says
+        `Access denied: …` or `Vayl couldn't complete that (ref …)`. Find the ref in the server log
+        next to the same `X-Request-ID`.
+      security:
+        - apiKey: []
+        - oidc: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: Accept
+          in: header
+          required: true
+          description: Must accept both JSON and server-sent events, or the server answers 406.
+          schema:
+            type: string
+            example: application/json, text/event-stream
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonRpcRequest'
+            examples:
+              initialize:
+                summary: initialize
+                value:
+                  jsonrpc: '2.0'
+                  id: 1
+                  method: initialize
+                  params:
+                    protocolVersion: '2025-06-18'
+                    capabilities: {}
+                    clientInfo: {name: curl, version: '1'}
+              toolsList:
+                summary: tools/list
+                value: {jsonrpc: '2.0', id: 2, method: tools/list}
+              toolsCall:
+                summary: tools/call (license_status)
+                value:
+                  jsonrpc: '2.0'
+                  id: 3
+                  method: tools/call
+                  params: {name: license_status, arguments: {}}
+              remember:
+                summary: tools/call (remember)
+                value:
+                  jsonrpc: '2.0'
+                  id: 4
+                  method: tools/call
+                  params:
+                    name: remember
+                    arguments: {text: 'Warfarin stopped today. Started apixaban 5 mg twice daily.', user_id: pt_4471}
+      responses:
+        '200':
+          description: |
+            A server-sent-events stream. Its `data:` line is the JSON-RPC response. Captured from
+            vayl-server 0.9.1.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              examples:
+                initialize:
+                  summary: initialize
+                  value: >-
+                    data: {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18",
+                    "capabilities":{"logging":{},"prompts":{"listChanged":true},
+                    "resources":{"subscribe":false,"listChanged":true},"tools":{"listChanged":true}},
+                    "serverInfo":{"name":"vayl","version":"0.9.1"},
+                    "instructions":"Vayl is persistent, reconciling memory. When the user asks you to remember, note or keep track of something, or states a fact or a change to one (a decision, a preference, a dose, an account setting, 'we switched to X'), call `remember` with one plain sentence: Vayl retires the old value instead of keeping both, which a notes file cannot do. Before answering from what you were told earlier (a project's stack, a customer's plan, a patient's current medication), call `recall`, with include_history=true for 'what was it before?'. Use `forget` when something is no longer true and has no replacement. If recall doesn't know, say so instead of guessing."}}
+                toolsCall:
+                  summary: tools/call (license_status)
+                  value: >-
+                    data: {"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text",
+                    "text":"Community edition — up to 3 principals. No license installed.\n
+                    principals in use: 1 / 3"}],"isError":false}}
+        '401':
+          description: No credential, or one that doesn't resolve to an active principal.
+          headers:
+            WWW-Authenticate:
+              schema: {type: string, example: Bearer}
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: 'unauthorized: send Authorization: Bearer vayl_sk_...'}
+        '403':
+          description: The `Origin` header isn't in `VAYL_ALLOWED_ORIGINS` (DNS-rebinding protection).
+        '406':
+          description: The `Accept` header doesn't include both `application/json` and `text/event-stream`.
+        '413':
+          description: The body is larger than `VAYL_MAX_BODY`, whether declared or chunked.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: request body too large}
+        '421':
+          description: The `Host` header isn't in `VAYL_ALLOWED_HOSTS`. Set it to your public host behind a proxy.
+        '429':
+          description: This client IP exceeded `VAYL_RATE_PER_MIN` in the last minute (per server process).
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: rate limit exceeded}
+  /healthz:
+    get:
+      tags: [Health]
+      operationId: healthz
+      summary: Liveness probe
+      description: Returns 200 while the process is serving. Unauthenticated.
+      security: []
+      responses:
+        '200':
+          description: The process is up.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, const: ok}
+              example: {status: ok}
+  /readyz:
+    get:
+      tags: [Health]
+      operationId: readyz
+      summary: Readiness probe
+      description: Runs `SELECT 1` against the database. Unauthenticated, and returns no error detail.
+      security: []
+      responses:
+        '200':
+          description: The database answered.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, const: ready}
+              example: {status: ready}
+        '503':
+          description: The database did not answer.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, const: not-ready}
+              example: {status: not-ready}
+  /metrics:
+    get:
+      tags: [Monitoring]
+      operationId: metrics
+      summary: Prometheus metrics
+      description: |
+        Counters in Prometheus text format. Contains no memory content, but reveals usage volume and
+        the number of active principals: keep it on an internal network, or set `VAYL_METRICS_TOKEN`
+        to require that bearer token (compared in constant time).
+
+        Metrics: `vayl_tool_calls_total{tool}`, `vayl_tool_errors_total{tool}`,
+        `vayl_tool_latency_avg_ms{tool}`, `vayl_action_total{action}`, `vayl_principals_active`,
+        `vayl_license_edition_info{edition}`.
+      security:
+        - {}
+        - metricsToken: []
+      responses:
+        '200':
+          description: Metrics in Prometheus text exposition format 0.0.4.
+          content:
+            text/plain:
+              schema: {type: string}
+              example: |
+                # TYPE vayl_tool_calls_total counter
+                # TYPE vayl_tool_errors_total counter
+                # TYPE vayl_tool_latency_avg_ms gauge
+                # TYPE vayl_action_total counter
+                # TYPE vayl_principals_active gauge
+                vayl_tool_calls_total{tool="remember"} 12
+                vayl_tool_errors_total{tool="remember"} 0
+                vayl_tool_latency_avg_ms{tool="remember"} 41.2
+                vayl_action_total{action="SUPERSEDE"} 3
+                vayl_principals_active 2
+                vayl_license_edition_info{edition="community"} 1
+        '401':
+          description: '`VAYL_METRICS_TOKEN` is set and the request did not send it.'
+          headers:
+            WWW-Authenticate:
+              schema: {type: string, example: Bearer}
+          content:
+            text/plain:
+              schema: {type: string}
+              example: unauthorized
+components:
+  securitySchemes:
+    apiKey:
+      type: http
+      scheme: bearer
+      bearerFormat: vayl_sk_…
+      description: An API key created with the `create_principal` tool. Shown once; only its hash is stored.
+    oidc:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        An OIDC ID token (RS256), verified against `VAYL_OIDC_JWKS_URL` with `iss`, `aud` and `exp`
+        required. Needs an Enterprise license granting `sso` and `pip install "vayl-mcp[sso]"`.
+    metricsToken:
+      type: http
+      scheme: bearer
+      description: The value of `VAYL_METRICS_TOKEN`, when set.
+  parameters:
+    RequestId:
+      name: X-Request-ID
+      in: header
+      required: false
+      description: |
+        Correlation ID. Reused if it is 1–64 characters of `A-Z a-z 0-9 . _ : -` (so proxy and Vayl
+        logs line up); otherwise replaced with a generated one. Echoed on the response and stamped on
+        every log line written while serving the request.
+      schema:
+        type: string
+        maxLength: 64
+        pattern: '^[A-Za-z0-9._:-]{1,64}$'
+        example: req-123
+  headers:
+    RequestId:
+      description: The request's correlation ID (the incoming one if it was valid, otherwise generated).
+      schema: {type: string, example: req-123}
+  schemas:
+    JsonRpcRequest:
+      type: object
+      required: [jsonrpc, method]
+      properties:
+        jsonrpc: {type: string, const: '2.0'}
+        id:
+          description: Request id, echoed in the response. Omit for a notification.
+          oneOf: [{type: integer}, {type: string}]
+        method:
+          type: string
+          description: The MCP method, for example `initialize`, `tools/list` or `tools/call`.
+          example: tools/call
+        params:
+          type: object
+          description: 'Method parameters. For `tools/call`: `{"name": <tool>, "arguments": {…}}`.'
+    Error:
+      type: object
+      properties:
+        error: {type: string}
+        detail: {type: string, description: 'For `422`, which argument is wrong and why.'}
+    ToolResult:
+      type: object
+      required: [result]
+      properties:
+        result:
+          type: string
+          description: The tool's reply, the same text an MCP `tools/call` returns.
+    ToolList:
+      type: object
+      properties:
+        tools:
+          type: array
+          items:
+            type: object
+            properties:
+              name: {type: string}
+              title: {type: [string, 'null']}
+              description: {type: string}
+              input_schema: {type: object, description: JSON Schema for the tool's arguments.}
+  responses:
+    Unauthorized:
+      description: No credential, or one that doesn't resolve to an active principal.
+      headers:
+        WWW-Authenticate:
+          schema: {type: string, example: Bearer}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: 'unauthorized: send Authorization: Bearer vayl_sk_...'}
+    Forbidden:
+      description: |
+        The key's role lacks the tool's capability, or the `user_id` is outside the key's scopes. The
+        denial is recorded in the audit log.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ToolResult'}
+          example: {result: "Access denied: 'create_principal' requires the 'admin' capability; your role(s) ['agent'] do not grant it."}
+    InvalidArguments:
+      description: An argument is missing, unknown or the wrong type for the tool's schema.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example:
+            error: invalid arguments
+            detail: |-
+              1 validation error for call[remember]
+              text
+                Missing required argument [type=missing_argument, input_value={}, input_type=dict]
+    TooLarge:
+      description: The body is larger than `VAYL_MAX_BODY`, whether declared or chunked.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: request body too large}
+    RateLimited:
+      description: This client IP exceeded `VAYL_RATE_PER_MIN` in the last minute (per server process).
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: rate limit exceeded}

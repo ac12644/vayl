@@ -5,7 +5,7 @@ icon: toolbox
 
 # MCP tools
 
-Vayl's API is a set of 32 MCP tools. There is no REST layer: any MCP client connects over stdio (`vayl-mcp`) or authenticated HTTP (`vayl-server`) and calls them by name. Usually the LLM in your agent picks the tool; you can also call them from your own code, see [Calling Vayl from code](../getting-started/calling-vayl-from-code.md).
+Vayl's API is a set of 32 tools. Any MCP client connects over stdio (`vayl-mcp`) or authenticated HTTP (`vayl-server`) and calls them by name, and `vayl-server` also serves each one as `POST /v1/tools/<name>` with JSON in and out; see the [HTTP API reference](https://vayl.gitbook.io/vayl-docs/api-reference). Usually the LLM in your agent picks the tool; you can also call them from your own code, see [Calling Vayl from code](../getting-started/calling-vayl-from-code.md).
 
 ## Reading these pages
 

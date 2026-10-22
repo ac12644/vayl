@@ -83,6 +83,23 @@ const team = await Vayl.connect({ url: "https://memory.example.com/mcp", apiKey:
 **Needs verification:** that `@vayl.dev/client` is published on npm at the version you expect. The source is in [`clients/typescript`](https://github.com/ac12644/vayl/tree/main/clients/typescript) and builds with `npm run build`.
 {% endhint %}
 
+## REST (any language, against vayl-server)
+
+`vayl-server` serves each tool as `POST /v1/tools/<name>`. Send the arguments as a JSON object and read `result`:
+
+```bash
+curl -s https://memory.example.com/v1/tools/remember \
+  -H "Authorization: Bearer vayl_sk_..." \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Acme Corp is on the Enterprise plan, account active.", "user_id": "cust_5521"}'
+```
+
+```json
+{"result":"Stored: [ADD] plan = Enterprise; [ADD] account_status = active"}
+```
+
+Errors use HTTP status codes: `401` for a bad key, `403` for a missing capability or scope, `404` for an unknown tool, `422` for a bad argument. Every tool, with its schema and a real example, is in the [HTTP API reference](https://vayl.gitbook.io/vayl-docs/api-reference).
+
 ## Raw MCP (any language, no Vayl client)
 
 The clients above wrap a standard MCP session. In another language, or for direct control, use your MCP SDK. Python over stdio:
