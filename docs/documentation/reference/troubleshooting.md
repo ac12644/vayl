@@ -339,7 +339,7 @@ Recall answers are written by the model, so wording varies between runs and mode
 
 ### A change wasn't applied
 
-* **Cause:** the slot is declared with `confirm: true`, so a replacement or removal is recorded as a proposal and the current value stands. `remember` reports it as `Stored: [FLAG] …`.
+* **Cause:** the slot is declared with `confirm: true`, so a replacement, a removal, or a new item on a slot that already holds a value is recorded as a proposal and the current value stands. `remember` reports it as `Stored: [FLAG] …`.
 * **Solution:** list proposals with `pending_changes()`, then `confirm_change(memory_id)` or `reject_change(memory_id)` with a key that has `approve`. See [Safety gates and human approval](../guides/safety-gates-and-human-approval.md).
 * **Verification:** after approval, `list_memories` shows the new value.
 

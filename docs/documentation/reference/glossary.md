@@ -25,7 +25,7 @@ icon: bookmark
 
 **Memory space:** An isolated store keyed by `tenant` plus `(user_id, agent_id, run_id)`. Reconciliation and recall never cross spaces.
 
-**Pending change:** A proposed replacement or removal on a `confirm` slot. It is held as `FLAGGED_CONFLICT` until someone with `approve` calls `confirm_change` or `reject_change`. `pending_changes` lists them.
+**Pending change:** A proposed replacement, removal or addition on a `confirm` slot. It is held as `FLAGGED_CONFLICT` until someone with `approve` calls `confirm_change` or `reject_change`. `pending_changes` lists them.
 
 **Preset:** A built-in slot schema enabled with `VAYL_SLOT_SCHEMA=preset:<name>`: `assistant`, `clinical`, `coding`, `finance`, `sales` or `support`.
 

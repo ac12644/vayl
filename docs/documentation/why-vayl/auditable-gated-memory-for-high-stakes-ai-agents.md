@@ -12,7 +12,7 @@ The built-in presets `preset:clinical` and `preset:finance` declare typical gate
 
 ## A person approves risky changes
 
-* **Confirm-gated slots.** Declare a slot with `"confirm": true` (for example `active_medication`). A replacement or removal is then stored as a proposal and the current value stands. `pending_changes` lists the queue; `confirm_change` applies a proposal and `reject_change` discards it.
+* **Confirm-gated slots.** Declare a slot with `"confirm": true` (for example `active_medication`). A replacement, a removal, or an addition to a slot that already holds a value is then stored as a proposal and the current value stands. `pending_changes` lists the queue; `confirm_change` applies a proposal and `reject_change` discards it.
 * **Approval needs the `approve` capability.** Since 0.6.0, only the `admin` and `member` roles have it, so an `agent` key cannot approve its own proposal. The recorded approver is the authenticated caller (`name [id]`); `decided_by` is only a note beside it.
 * **Trusted sources are bound to keys.** A write whose `source` is listed in `VAYL_TRUSTED_SOURCES` skips the confirmation gate. Since 0.6.0 it is accepted only from a key whose principal name equals that source, or from a caller with `approve`. Anything else gets "Access denied" and is audited.
 

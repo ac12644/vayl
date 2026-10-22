@@ -59,7 +59,7 @@ When it does answer, the answer is written by the model, like any recall. Use `s
 
 ## Require a person to approve risky changes
 
-Some writes are themselves the hazard: "we should probably stop the warfarin" in a note is not an order to stop it. A slot declared with `confirm: true` doesn't apply a replacement or removal. It records a **proposal**, leaves the current value standing, and waits for a person:
+Some writes are themselves the hazard: "we should probably stop the warfarin" in a note is not an order to stop it. A slot declared with `confirm: true` doesn't apply a replacement, a removal, or a new item added to a slot that already holds one (a second medication). It records a **proposal**, leaves the current value standing, and waits for a person:
 
 ```python
 remember(text="Increase warfarin to 7 mg PO daily", user_id="patient_42")
@@ -99,7 +99,11 @@ The approver recorded in the audit log is the authenticated caller, as `name [pr
 ### How proposals behave
 
 * A proposal is **flagged, not active**, so recall never presents it as current.
-* A first write to a gated slot isn't gated. There is nothing to lose yet.
+* Only the first value on an empty gated slot applies directly; there is nothing to lose yet. After that, a new list item is proposed as `ADD <subject>: '<value>'`.
+* Stop language that names a current list item ("warfarin stopped today", "D/C warfarin") is proposed as a removal, even when the model files it as history or as a new entry. A hold ("hold metformin tonight") is not a stop, and hedged text ("probably stop it if …") never becomes one.
+* A future-tense order on a gated slot ("increase metformin to 1000 mg", "start apixaban") goes to the queue too.
+* A change the model aims at a gated fact goes through that fact's gate, even if the model names a different subject for it.
+* Before approving a new anticoagulant, the reviewer is warned if another one would stay current. `pending_changes` and `confirm_change` both show `⚠ … two anticoagulants`. It's a warning, not a block: an overlap can be intended. Common brand names (Coumadin, Eliquis, Xarelto, Pradaxa, Savaysa, Lovenox) are matched to their generic names. For anything wider, map drug names upstream, for example to RxNorm, before they reach Vayl.
 * Proposing the same change twice queues it once.
 * A proposal can't be confirmed once the value it would have replaced has changed. It was made against state that no longer holds; `confirm_change` says so and the change must be proposed again.
 * A rejected proposal is kept as history: that someone proposed it is worth auditing.

@@ -3,6 +3,40 @@
 All notable changes to Vayl are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- **Medication changes from free text wait for approval, as the clinical preset promises.** Measured
+  with a real model (`benchmarks/evaluations/med_change_safety.py`), 36–43% of medication-change
+  sentences changed the list with no approval, depending on the model (gpt-6-luna, gpt-5-mini,
+  gpt-6-sol), most often leaving warfarin and apixaban both active after a switch. After the fix: 0 of
+  1,440 trials across 24 phrasings, including 11 written after the fix, and every expected change
+  reached the queue. See `benchmarks/results/med_change_safety.md`. On confirm-gated slots:
+  - an addition to a slot that already holds a value is now proposed (`ADD active_medication: '…'`),
+    and `confirm_change` adds it; only the first value on an empty gated slot applies directly;
+  - stop language that names a current item ("warfarin stopped today", "D/C warfarin", "Coumadin
+    stopped", "been off warfarin since…") is a removal proposal, even when the model files it as
+    history, as an event, as a new entry or under an invented subject; a hold is not a stop, and
+    hedged text ("probably … if …", "consider …") never is;
+  - a future-tense order ("increase metformin to 1000 mg") goes to the queue;
+  - a change the model aims at a gated fact by id goes through that fact's gate, whatever subject it
+    names (previously "metformin_therapy_status" could retire metformin unreviewed);
+  - status or reason values ("held_for_contrast", "acute_kidney_injury") are no longer proposed as
+    medications.
+- An unknown action from the extractor (`RETIRE`) no longer raises and loses the whole message; it
+  maps to its meaning or is flagged.
+
+### Added
+- `pending_changes` and `confirm_change` warn when approving a proposal would leave two
+  anticoagulants current. Common anticoagulant brand names (Coumadin, Eliquis, Xarelto, Pradaxa,
+  Savaysa, Lovenox) match their generic names.
+
+### Changed
+- On the clinical preset, adding a second medication from an untrusted source now needs approval.
+  Trusted feeds (`VAYL_TRUSTED_SOURCES`) still apply directly.
+- More hedges count as hypothetical ("probably", " if ", "consider", "plan to", "would"), so a
+  conditional sentence never triggers a removal.
+
 ## [0.10.0] — 2026-10-22
 
 REST routes for every tool with a generated API reference, and memory backends for Google ADK,

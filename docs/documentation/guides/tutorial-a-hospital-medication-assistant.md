@@ -103,12 +103,12 @@ Over stdio, every call runs as a trusted local admin, which has every capability
 
 ## Step 2: admission, recording home meds and allergies
 
-On admission a nurse takes the medication history. Each line becomes a fact. Because the slots are declared, the facts land in `active_medication` and `allergy` and are tagged `critical`:
+On admission the patient's home medication list arrives from the pharmacy-reconciled record over the FHIR feed, the trusted source configured in Step 1. Each line becomes a fact. Because the slots are declared, the facts land in `active_medication` and `allergy` and are tagged `critical`:
 
 ```python
-print(m.remember("Home med: warfarin 5 mg PO daily", source="bpmh"))
-print(m.remember("Home med: metformin 500 mg PO twice daily", source="bpmh"))
-print(m.remember("Allergic to penicillin (rash)", source="bpmh"))
+print(m.remember("Home med: warfarin 5 mg PO daily", source="fhir"))
+print(m.remember("Home med: metformin 500 mg PO twice daily", source="fhir"))
+print(m.remember("Allergic to penicillin (rash)", source="fhir"))
 ```
 
 ```
@@ -117,9 +117,9 @@ Stored: [ADD] active_medication = metformin 500 mg PO twice daily
 Stored: [ADD] allergy = penicillin (rash)
 ```
 
-Because `active_medication` is `multi`, metformin is added next to warfarin instead of replacing it. `source="bpmh"` records where each fact came from, which the audit log keeps.
+Because `active_medication` is `multi`, metformin is added next to warfarin instead of replacing it. `source="fhir"` records where each fact came from, which the audit log keeps, and because `fhir` is trusted the list applies directly.
 
-These are first writes to the gated slot, with nothing to lose yet, so they apply directly. The approval gate applies when you later change or remove an existing value.
+If the medication history came from conversation instead, from an untrusted source, only the first drug would apply. Each further drug would wait in `pending_changes` as `ADD active_medication: '...'` until a clinician approves it, so a misheard or invented medication can never become current on its own. Allergies are never gated: a new allergy must count at once.
 
 ## Step 3: the current picture
 
