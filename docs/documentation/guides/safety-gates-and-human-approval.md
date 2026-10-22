@@ -9,7 +9,7 @@ icon: gear
 
 Reconciliation keeps memory current. For agents where a wrong action is costly (clinical, financial, legal), Vayl adds five guardrails on top: an action gate, a human approval queue, trusted sources for authorized feeds, a critical-fact channel, and declared slots that tie them together.
 
-The examples use a clinical space, `user_id="patient_42"`, with the built-in `preset:clinical` schema. Outputs are real tool output; subject names under your own schema will be the ones you declare.
+The examples use a clinical space, `user_id="patient_42"`, with the built-in `preset:clinical` schema and `VAYL_CONFIRM_MODE=review`, so every medication change is queued and you can see the approval flow. Outputs are real tool output; subject names under your own schema will be the ones you declare.
 
 ## Gate an action on the facts behind it
 
@@ -85,6 +85,29 @@ confirm_change(memory_id=4, user_id="patient_42", decided_by="phoned pharmacy")
 reject_change(memory_id=4, user_id="patient_42")
 # Discarded #4. The current value is unchanged.
 ```
+
+### Automatic or reviewed
+
+A gated slot has a mode, set with `"confirm"` in the schema:
+
+| `confirm` | What happens to a change |
+| --- | --- |
+| `"auto"` | A clear change applies at once and is marked `auto_applied` in history. Only an uncertain one waits in the queue. |
+| `"review"` or `true` | Every change waits for a person. |
+| `false` | No gate. |
+
+In the clinical preset, `active_medication` is `"auto"` and `code_status` is `"review"`. `VAYL_CONFIRM_MODE=review` (or `auto`) overrides the mode for every gated slot, for a deployment whose policy requires sign-off on everything.
+
+In `"auto"` mode a change waits for a person instead of applying when any of these holds:
+
+* the sentence hedges or negates ("probably stop it if …", "do not stop the warfarin", "don't switch her yet");
+* it is an order for later ("start apixaban tomorrow");
+* the model's confidence is below the auto-apply threshold;
+* the model aimed it at a gated fact under a different subject, or returned an action Vayl had to guess;
+* the stop was found only by Vayl's sentence check, not extracted by the model;
+* applying it would leave two anticoagulants active, for example a switch whose stop the model missed. The new drug is then queued with its stop, so a switch applies whole or not at all.
+
+Everything applied automatically stays in history and in the audit log, so a reviewer can check or reverse it later.
 
 ### Who can approve
 

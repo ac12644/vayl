@@ -53,7 +53,7 @@ By default Vayl lets the extractor name its own slots. For a clinical domain we 
     {
       "name": "active_medication",
       "description": "a medication the patient is currently taking, with dose and frequency",
-      "category": "critical", "verbatim": true, "multi": true, "confirm": true,
+      "category": "critical", "verbatim": true, "multi": true, "confirm": "auto",
       "aliases": ["current_medication", "medication", "prescribed_medication", "meds"]
     }
   ]
@@ -67,7 +67,7 @@ The preset also declares `code_status` (critical, confirm-gated), `primary_diagn
 | `verbatim` | store the value exactly as stated | normalizing `warfarin 5 mg PO daily` could lose the dose |
 | `category: critical` | tag every fact in the slot | with `VAYL_CRITICAL_CATEGORIES=critical`, meds and allergies bypass ranking |
 | `multi: true` | the slot holds a list | a patient has several meds and allergies; a new one is added, not swapped for the others |
-| `confirm` | changes and removals are proposed, not applied | on `active_medication` a change needs sign-off; on `allergy` it's `false`, because a new allergy must show up immediately |
+| `confirm` | changes are gated. `"auto"`: a clear change applies at once and is marked auto-applied, and only an uncertain one waits for sign-off. `"review"` (or `true`): every change waits | `active_medication` is `"auto"` in the preset, `code_status` is `"review"`, and `allergy` is `false`, because a new allergy must show up immediately |
 
 To customise the slots, copy the preset into your own JSON file and point `VAYL_SLOT_SCHEMA` at its absolute path. A missing or malformed schema stops Vayl at startup, so you never run believing a critical slot is declared when it isn't.
 
@@ -88,12 +88,15 @@ env = {
     "VAYL_SLOT_SCHEMA": "preset:clinical",
     "VAYL_CRITICAL_CATEGORIES": "critical",
     "VAYL_TRUSTED_SOURCES": "fhir",            # used in Step 7
+    "VAYL_CONFIRM_MODE": "review",             # this ward signs off every medication change
 }
 
 with Vayl(user_id=PATIENT, env=env) as m:
     # … the steps below go here …
     pass
 ```
+
+This tutorial runs the approval queue on every medication change (`VAYL_CONFIRM_MODE=review`), so you can see each step of the sign-off. Leave it unset to use the preset's `"auto"` mode, where a clear change such as "D/C warfarin, start apixaban 5 mg BID" applies at once and only an uncertain one is queued; see [Safety gates and human approval](safety-gates-and-human-approval.md#automatic-or-reviewed).
 
 Since 0.6.0, `OPENAI_API_KEY` on its own configures both the chat model and the embedder. For a fully local setup, see [Local models with Ollama](local-models-with-ollama.md).
 

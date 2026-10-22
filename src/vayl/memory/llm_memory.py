@@ -504,12 +504,15 @@ _ACTION_SYNONYMS = {"RETIRE": "RETRACT", "REMOVE": "RETRACT", "DELETE": "RETRACT
 
 
 def _action(raw):
+    """(Action, exact): exact is False when the action was mapped from a synonym or unknown."""
     name = str(raw or "ADD").strip().upper()
+    if name in Action.__members__:
+        return Action(name), True
     try:
-        return Action(_ACTION_SYNONYMS.get(name, name))
-    except ValueError:
+        return Action(_ACTION_SYNONYMS[name]), False
+    except KeyError:
         log.warning("extractor returned an unknown action %r; flagging the fact for review", name)
-        return Action.FLAG
+        return Action.FLAG, False
 
 
 _SWITCH_FROM = r"(?:switch(?:ed|ing)?|chang(?:e|ed|ing)|transition(?:ed|ing)?|convert(?:ed|ing)?)\s+(?:[a-z']+\s+){0,2}from\s+"
@@ -525,6 +528,20 @@ def _stop_named(text, ident):
     return re.search(rf"(?<![a-z]){_STOP_PHRASE}\s+(?:[a-z']+\s+){{0,3}}{d}(?![a-z])"
                      rf"|(?<![a-z]){d}\s+(?:[a-z']+\s+){{0,2}}{_STOP_PHRASE}(?![a-z])"
                      rf"|{_SWITCH_FROM}{d}(?![a-z])", t) is not None
+
+
+# Negated stop language: "do not stop the warfarin", "don't switch her yet". In review mode a missed
+# negation only costs a wrong proposal; in auto mode it would be a wrong removal, so it is checked.
+_NEGATED = re.compile(r"(?<![a-z])(?:do not|don't|dont|never|not to|avoid|no need to|hold off on|without)"
+                      r"\s+(?:[a-z']+\s+){0,2}(?:stop|discontinu|d/c|cease|chang|switch|remov)")
+_CONFIRM_MODE = os.environ.get("VAYL_CONFIRM_MODE", "").strip().lower()
+if _CONFIRM_MODE not in ("", "auto", "review"):
+    raise ValueError(f"VAYL_CONFIRM_MODE must be 'auto' or 'review', not {_CONFIRM_MODE!r}")
+
+
+def _gate_mode(spec):
+    """'auto' or 'review' for a gated slot; VAYL_CONFIRM_MODE overrides the slot's own mode."""
+    return _CONFIRM_MODE or getattr(spec, "confirm_mode", "") or "review"
 
 
 _SLUG = re.compile(r"[a-z0-9]+(?:[_-][a-z0-9]+)*_[a-z0-9-]+")   # snake_case, no spaces
@@ -690,8 +707,28 @@ class LLMMemory:
         # top-k RELEVANT active facts (all of them when the space is small) so write cost stays
         # bounded as memory grows; _apply still reconciles against the full active set.
         candidates = retrieval.embed_retrieve(text, self.active(), k=_RECONCILE_CONTEXT)
+        before = {s.id for s in self.statements}
         results = [self._apply(o, text, source) for o in llm_extract_classify(text, candidates)]
+        self._hold_duplicate_anticoagulants(before)
         return results + self._stop_sweep(text, source)
+
+    def _hold_duplicate_anticoagulants(self, before):
+        """Backstop for confirm "auto": an anticoagulant auto-added by this message while another
+        stays current (a switch whose stop half the model missed) goes back to the review queue, so a
+        switch applies whole or not at all. Runs after every fact in the message is applied, so a
+        stop and a start in one sentence are judged together."""
+        for s in [x for x in self.active() if x.id not in before and (x.metadata or {}).get("auto_applied")]:
+            ident = _list_identity(s.value)
+            others = [x for x in self.active() if x.subject == s.subject and x.id != s.id
+                      and _list_identity(x.value) in ANTICOAGULANTS and _list_identity(x.value) != ident]
+            if ident in ANTICOAGULANTS and others:
+                rival = next((x for x in self.statements if x.id == s.supersedes), None)
+                if rival is not None and rival.status is Status.SUPERSEDED:
+                    rival.status = Status.ACTIVE          # undo the replacement it made
+                s.status = Status.FLAGGED
+                s.metadata = {**(s.metadata or {}), "auto_applied": None,
+                              "pending": "SUPERSEDE" if rival is not None else "ADD",
+                              "reason": "would leave two anticoagulants active"}
 
     def _stop_sweep(self, text, source=""):
         """The last safety net for a gated list: if the sentence itself says to stop a current item
@@ -700,7 +737,8 @@ class LLMMemory:
         model sometimes files the stop under an invented subject or archives the drug's own value as
         history, and then the stop is simply lost. Only ever adds a proposal for a person to decide."""
         if (not SLOT_SCHEMA or str(source or "").lower() in _TRUSTED_SOURCES
-                or has(text, HYPOTHETICAL_MARKERS) or has(text, SARCASM_MARKERS)):
+                or has(text, HYPOTHETICAL_MARKERS) or has(text, SARCASM_MARKERS)
+                or _NEGATED.search(str(text).lower())):
             return []
         proposed = {p.supersedes for p in self.pending()}
         out = []
@@ -750,7 +788,12 @@ class LLMMemory:
         return sorted([s for s in self.statements if s.subject == subject], key=lambda s: s.id)
 
     def _apply(self, o, text, source=""):
-        act = _action(o.get("action", "ADD")); conf = float(o.get("confidence", 0.5))
+        act, exact = _action(o.get("action", "ADD")); conf = float(o.get("confidence", 0.5))
+        # In a confirm "auto" slot only a CLEAR change applies by itself; anything that sets this
+        # (a guessed action, a rerouted subject, a future-tense order, hedging, negation, low
+        # confidence) still goes to the approval queue.
+        uncertain = not exact
+        auto_applied = False
         # coerce: the LLM occasionally emits null / list / number for a field
         subj = str(o.get("subject") or "unknown")
         val = str(o.get("value") or "(unspecified)")
@@ -774,6 +817,7 @@ class LLMMemory:
             if tspec is not None and tspec.confirm:
                 spec, subj = tspec, tspec.name
                 is_multi = tspec.multi
+                uncertain = True
         # ── STOP ON A GATED LIST ──
         # "Warfarin stopped today" / "D/C warfarin" / a whole "Stop the warfarin." often comes back as
         # an ADD or an ARCHIVE (the model filing it as history) whose VALUE names an active list item
@@ -785,7 +829,7 @@ class LLMMemory:
         # have it turned into an ADD (events never retract) and archived.
         if (spec is not None and spec.confirm and is_multi
                 and act in (Action.ADD, Action.COEXIST, Action.REFINE, Action.ARCHIVE, Action.RETRACT)
-                and _STOP_WORDS.search(val.lower())
+                and _STOP_WORDS.search(val.lower()) and not _NEGATED.search(f"{text} {val}".lower())
                 and not has(text, HYPOTHETICAL_MARKERS) and not has(text, SARCASM_MARKERS)):
             named = [s for s in self.active() if s.subject == subj and _names_item(val, s.value)]
             if len(named) == 1:
@@ -832,6 +876,7 @@ class LLMMemory:
                      and (act == Action.SUPERSEDE or any(s.subject == subj for s in self.active())))
             if not gated:
                 act = Action.FLAG   # pending — surface it, don't assert it as current
+            uncertain = True        # an order for later: a person decides when it takes effect
 
         # ── DETERMINISTIC RETRACT UPGRADE ──
         # A removal the extractor mislabelled ("ServiceA no longer calls ServiceB" coming back as
@@ -900,7 +945,19 @@ class LLMMemory:
                 and (act in (Action.SUPERSEDE, Action.RETRACT, Action.REFINE) or gate_add)
                 and str(source or "").lower() not in _TRUSTED_SOURCES):
             tgt = target or _slot_target(self.active(), subj, val, is_multi)
-            if tgt is None and gate_add and is_multi:
+            # a list item that names no current entry is a NEW item, even when the model called it a
+            # replacement; otherwise a SUPERSEDE with no identifiable target skipped the gate entirely
+            new_item = tgt is None and is_multi and act in (Action.ADD, Action.COEXIST, Action.SUPERSEDE, Action.REFINE)
+            if gate_add and tgt is not None:
+                act = Action.SUPERSEDE   # names an existing item (a dose change) or a single slot's value
+            uncertain = (uncertain or conf < AUTO_THRESHOLD or has(text, HYPOTHETICAL_MARKERS)
+                         or has(text, SARCASM_MARKERS) or _NEGATED.search(text.lower()) is not None)
+            if _gate_mode(spec) == "auto" and not uncertain and (tgt is not None or new_item):
+                # A clear change on an "auto" slot applies now, below, and is marked auto-applied.
+                target, auto_applied = tgt, True
+                if new_item:
+                    act = Action.ADD
+            elif new_item:
                 # a new item for the list: propose adding it, beside (not instead of) what is there
                 if any(x.subject == subj and (x.metadata or {}).get("pending") == "ADD"
                        and canon(x.value) == canon(val) for x in self.pending()):
@@ -910,9 +967,7 @@ class LLMMemory:
                 pend.metadata = {"pending": "ADD", "category": spec.category or ""}
                 self.statements.append(pend)
                 return Action.FLAG, subj, val
-            if gate_add:
-                act = Action.SUPERSEDE   # names an existing item (a dose change) or a single slot's value
-            if tgt is not None:
+            elif tgt is not None:
                 # The same change proposed twice is one decision, not two. Without this, repeating
                 # "switch to apixaban" stacked identical rows in the review queue — the same
                 # early-return-without-dedup shape as the valid-time gate. A RETRACT proposal is
@@ -939,9 +994,12 @@ class LLMMemory:
                                                  status=Status.FLAGGED, confidence=conf, raw=text, source=source))
                 return Action.FLAG, subj, tgt.value
             tgt.status = Status.SUPERSEDED
-            self.statements.append(self._mk(f"{subj}@{scope}", subj, f"(retracted: {tgt.value})", scope,
-                                             status=Status.HISTORICAL, confidence=conf,
-                                             supersedes=tgt.id, raw=text, source=source))   # tombstone for provenance
+            tomb = self._mk(f"{subj}@{scope}", subj, f"(retracted: {tgt.value})", scope,
+                            status=Status.HISTORICAL, confidence=conf,
+                            supersedes=tgt.id, raw=text, source=source)   # tombstone for provenance
+            if auto_applied:
+                tomb.metadata = {"auto_applied": True}
+            self.statements.append(tomb)
             self._gretire(getattr(tgt, "subject", subj))   # drop the edge by subject (head-agnostic)
             self._gwrite(o, Action.RETRACT)
             return Action.RETRACT, subj, tgt.value
@@ -963,6 +1021,8 @@ class LLMMemory:
                 self.statements.append(st)
                 return Action.FLAG, subj, val
             target.value = val; target._emb = None   # value changed -> re-embed on save
+            if auto_applied:
+                target.metadata = {**(target.metadata or {}), "auto_applied": True}
             self._gwrite(o, Action.REFINE); return act, subj, val
         st = self._mk(f"{subj}@{scope}", subj, val, scope, confidence=conf, raw=text, source=source)
         if is_event:
@@ -972,6 +1032,8 @@ class LLMMemory:
             # needs. The extractor already writes this; discarding it paid for the tokens and kept
             # none of the value.
             st.metadata = {**(st.metadata or {}), "reason": str(o.get("reason"))[:200]}
+        if auto_applied:
+            st.metadata = {**(st.metadata or {}), "auto_applied": True}
         if spec is not None and spec.category:
             # Declaring a slot's category is what makes the critical-fact channel usable: an
             # operator names the slots once instead of every caller remembering to tag each write.

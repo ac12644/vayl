@@ -25,15 +25,29 @@ All notable changes to Vayl are documented here. This project adheres to
     medications.
 - An unknown action from the extractor (`RETIRE`) no longer raises and loses the whole message; it
   maps to its meaning or is flagged.
+- An exhausted OpenAI quota (`insufficient_quota`, sent as HTTP 429) is no longer retried with
+  backoff, which made every call hang for minutes; it fails at once, and `health` shows the
+  provider's reason ("You have no credits remaining").
+- A replacement aimed at a list item that names no current entry is proposed as a new item instead
+  of being stored unreviewed.
 
 ### Added
+- **Automatic mode for gated slots (`"confirm": "auto"`).** A clear change applies at once and is
+  marked `auto_applied` in history; only an uncertain one waits for approval: a hedge, a negation
+  ("do not stop the warfarin"), a future-tense order, low confidence, a guessed action or rerouted
+  subject, a stop found only by the sentence check, or a change that would leave two anticoagulants
+  active (the new drug then waits with its stop, so a switch applies whole or not at all). The
+  clinical preset now puts `active_medication` on `"auto"` and keeps `code_status` on `"review"`.
+  `"confirm": true` still means review. `VAYL_CONFIRM_MODE=review|auto` overrides every gated slot.
 - `pending_changes` and `confirm_change` warn when approving a proposal would leave two
   anticoagulants current. Common anticoagulant brand names (Coumadin, Eliquis, Xarelto, Pradaxa,
   Savaysa, Lovenox) match their generic names.
 
 ### Changed
-- On the clinical preset, adding a second medication from an untrusted source now needs approval.
-  Trusted feeds (`VAYL_TRUSTED_SOURCES`) still apply directly.
+- On the clinical preset, medications are now on `"auto"`: clear changes apply by themselves, so most
+  medication changes no longer need a person. Set `VAYL_CONFIRM_MODE=review` to keep approving every
+  change, including adding a second medication. Trusted feeds (`VAYL_TRUSTED_SOURCES`) still apply
+  directly in both modes.
 - More hedges count as hypothetical ("probably", " if ", "consider", "plan to", "would"), so a
   conditional sentence never triggers a removal.
 
