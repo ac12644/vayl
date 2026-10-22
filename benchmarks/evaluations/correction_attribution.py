@@ -77,6 +77,16 @@ def _run(drug, a, b, c, days, kind, text):
     return bool(md.get("corrected")), bool(md.get("corrected") or md.get("changed_by"))
 
 
+def _score(window_days):
+    llm_memory._CORRECTION_WINDOW = window_days * DAY
+    t = {"tp": 0, "fp": 0, "fn": 0, "tn": 0}
+    for _name, truth, days, kind, text in SCENARIOS:
+        for d in DRUGS:
+            said = _run(*d, days, kind, text)[0]
+            t[("t" if said == truth else "f") + ("p" if said else "n")] += 1
+    return t
+
+
 def main():
     rows, vayl, naive = [], {"tp": 0, "fp": 0, "fn": 0, "tn": 0}, {"tp": 0, "fp": 0, "fn": 0, "tn": 0}
     for name, truth, days, kind, text in SCENARIOS:
@@ -92,6 +102,10 @@ def main():
         p = t["tp"] / max(1, t["tp"] + t["fp"])
         r = t["tp"] / max(1, t["tp"] + t["fn"])
         print(f"{label:24} precision {p:.2f}  recall {r:.2f}  false corrections {t['fp']}  missed {t['fn']}")
+    print("\nwindow sweep (days): false corrections / missed corrections")
+    for w in (0.5, 1, 3, 7, 14, 30, 60):
+        t = _score(w)
+        print(f"  {w:>4}: {t['fp']:2} / {t['fn']:2}")
 
 
 if __name__ == "__main__":

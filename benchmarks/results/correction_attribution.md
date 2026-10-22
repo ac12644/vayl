@@ -28,3 +28,13 @@ The baseline is the signal used in the revert-rate literature and in the closest
 * The scenarios and their labels were written by hand for this test, not drawn from real records. Treat them as a mechanism check, not an accuracy estimate.
 * A deliberate clinical reversal inside the window ("reduce back to 5 mg after the bleed") looks exactly like a correction and is counted as one. This hard case is left in on purpose. A reason given in the text ("after", "due to") could separate it, but that rule has not been built or tested.
 * Evidence is kept per memory space. A deployment with one space per patient needs it pooled across spaces before `"confirm": "earned"` is useful.
+
+## Sensitivity to the time window
+
+False corrections / missed corrections over the same 55 trials:
+
+| Window (days) | 0.5 | 1 | 3 | 7 (default) | 14 | 30 | 60 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| False / missed | 0 / 10 | 0 / 10 | 0 / 0 | 5 / 0 | 5 / 0 | 5 / 0 | 15 / 0 |
+
+The perfect score at 3 days is an artefact: the hard case (a deliberate reversal 3 days later) falls just outside that window, and the scenario timings were chosen by hand. The result is highly sensitive to the window and to scenario timing, which is why this test cannot stand as accuracy evidence. That needs real records, or a larger set labelled independently.
