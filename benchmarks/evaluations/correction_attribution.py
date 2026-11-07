@@ -42,6 +42,7 @@ SCENARIOS = [
 def _say(m, text, *facts, source=""):
     base = {"scope": "global", "confidence": 0.9, "kind": "state", "time_ref": "present"}
     llm_memory.llm_extract_classify = lambda t, c: [{**base, **f} for f in facts]
+    llm_memory.llm_verdict = lambda *a, **k: []   # recordings hold the first pass only
     m.add(text, source=source)
 
 

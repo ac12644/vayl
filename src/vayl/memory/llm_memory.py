@@ -748,6 +748,12 @@ def _sentence_for(text, *values):
     """The sentence(s) of `text` that a fact is about: those naming any of `values` by identity or by a
     distinctive word. Hedges and negations are judged there, so "if the rash returns we may stop it.
     Lisinopril stopped today." still stops lisinopril. Falls back to the whole text when none match."""
+    hit = _naming(text, values)
+    return " ".join(hit) if hit else str(text or "")
+
+
+def _naming(text, values):
+    """The sentences of `text` naming any of `values` by identity or by a distinctive word, in order."""
     sents = [x for x in _SENT_SPLIT.split(str(text or "")) if x.strip()]
     keys = set()
     for v in values:
@@ -757,13 +763,28 @@ def _sentence_for(text, *values):
         if ident:
             keys |= _names_for(ident)
         keys |= {w for w in re.findall(r"[a-z][a-z0-9/-]{3,}", str(v).lower())}
-    hit = [x for x in sents if any(re.search(rf"(?<![a-z]){re.escape(k)}(?![a-z])", x.lower()) for k in keys)]
-    return " ".join(hit) if hit else str(text or "")
+    return [x for x in sents if any(re.search(rf"(?<![a-z]){re.escape(k)}(?![a-z])", x.lower()) for k in keys)]
 
 
 # Language that says a list item has ENDED (a ticket closed, a position sold, a drug stopped).
 _ENDED = re.compile(_STOP_WORDS.pattern + r"|(?<![a-z])(?:resolved|closed|fixed|cancel+ed|ended|expired|revoked"
                     r"|removed|sold|liquidated|closed out|transferred out|no longer)(?![a-z])")
+# Language that says a change to an existing item has happened, not that it is planned.
+_DONE = re.compile(_ENDED.pattern + r"|(?<![a-z])(?:switched|changed|increased|decreased|reduced|titrated"
+                   r"|upgraded|downgraded|replaced|now on|now at|moved to)(?![a-z])")
+
+
+def _latest_done(text, *values):
+    """The last sentence naming the item, when it says plainly that the change happened (no hedge, no
+    hold), else None. Notes repeat earlier text, so the latest mention is the current one: "may switch
+    to Eliquis" copied forward above "Coumadin discontinued" must not hold back the stop."""
+    hit = _naming(text, values)
+    if not hit:
+        return None
+    last = hit[-1]
+    return last if _DONE.search(last.lower()) and not _hedged(last) and not _NO_CHANGE.search(last.lower()) else None
+
+
 _STOPWORDS = {"with", "from", "that", "this", "have", "been", "were", "will", "into", "about", "after", "their"}
 
 
@@ -946,6 +967,11 @@ class LLMMemory:
         # top-k RELEVANT active facts (all of them when the space is small) so write cost stays
         # bounded as memory grows; _apply still reconciles against the full active set.
         candidates = retrieval.embed_retrieve(text, self.active(), k=_RECONCILE_CONTEXT)
+        # Sentences earlier messages already carried (notes copy text forward): judged when first seen.
+        # ponytail: in-memory statements only; after a reload, history rows (rejected proposals) are not
+        # here, so copied text is judged afresh. Load history_statements() if that matters.
+        self._old_sents = {_norm_utterance(x) for st in self.statements for x in _SENT_SPLIT.split(st.raw or "")
+                           if x.strip()}
         before = {s.id for s in self.statements}
         was = _pairs(self.active())
         # owner (and with it the source) goes to the extractor only when the caller names the owner
@@ -1407,9 +1433,35 @@ class LLMMemory:
             # A verdict op is judged on the words it quotes plus its own sentence, not the whole message:
             # whole-message hedging asked 27 more questions with the verdict on, 11 of them needless.
             hedge_ctx = (f'{o.get("quote") or ""} {_sentence_for(text, val)}' if o.get("reason") == "verdict" else text)
+            # A stop or replacement of an item on the record is judged on its LATEST mention when that
+            # mention says plainly it happened: a hedge in older, copied-forward text no longer holds it
+            # back. New items keep the whole message (the misreadings above were new items).
+            if (hedge_ctx is text and tgt is not None and act in (Action.SUPERSEDE, Action.RETRACT, Action.REFINE)
+                    and _latest_done(text, tgt.value) is not None):
+                hedge_ctx = _latest_done(text, tgt.value)
+            old = getattr(self, "_old_sents", set())
+            if old:
+                evidence = _naming(text, [val, tgt.value if tgt is not None else ""])
+                if evidence and all(_norm_utterance(x) in old for x in evidence) and any(
+                        (x.metadata or {}).get("resolved") == "rejected" and x.subject == subj
+                        and x.supersedes == (tgt.id if tgt is not None else None)
+                        and (canon(x.value) == canon(val) or _list_identity(x.value) == _list_identity(val))
+                        for x in self.statements):
+                    return Action.SKIP, subj, val   # copied-forward text a person already said no to
+                if hedge_ctx is text:
+                    fresh = [x for x in _SENT_SPLIT.split(text) if x.strip() and _norm_utterance(x) not in old]
+                    if fresh:
+                        hedge_ctx = " ".join(fresh)   # a hedge in copied-forward text was judged when first seen
             unsure = ("unclear action" if not exact
                       else (why_unsure or "unsure") if uncertain else "low confidence" if conf < AUTO_THRESHOLD
                       else "hedged wording" if _hedged(hedge_ctx) else "")
+            # A refinement adds detail to what it refines. One that no longer names the old value
+            # ("atrial fibrillation" refined to "rapid AF") replaces it, and is a reading to check.
+            if not unsure and act is Action.REFINE and tgt is not None and not _mentions(val, tgt.value):
+                unsure = "refinement drops the old value"
+            # "phone support removed; retired for Pro" filed as a NEW entitlement would put it back.
+            if not unsure and new_item and _ENDED.search(str(val).lower()):
+                unsure = "new item says it ended"
             if untrusted:
                 unsure = "pasted or retrieved text"
             uncertain = uncertain or bool(unsure)

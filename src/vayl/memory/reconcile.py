@@ -15,6 +15,7 @@ ambiguous cases get FLAGGED, not guessed.
 from __future__ import annotations
 
 import itertools
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -90,5 +91,7 @@ def canon(v: str | None) -> str | None:
     return SYNONYMS.get(v, v) if v else v
 
 def has(text: str, markers) -> bool:
+    # A marker must start a word: "lol" is not sarcasm inside "metoprolol". Prefix matches still count
+    # ("proposals", "considering").
     t = _norm(text)
-    return any(m in t for m in markers)
+    return any(re.search((r"(?<![a-z])" if m[:1].isalpha() else "") + re.escape(m), t) for m in markers)

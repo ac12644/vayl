@@ -278,10 +278,11 @@ _STOP_LISINOPRIL = {"action": "RETRACT", "subject": "active_medication", "value"
 
 
 def test_a_hedged_proposal_the_verdict_confirms_applies(clinical, monkeypatch):
-    text = "If the rash comes back we may stop metformin. Lisinopril was stopped today for cough."
+    # "inactivated" is not plain stop language, so the first pass alone leaves this one for a person
+    text = "If the rash comes back we may stop metformin. Pharmacy inactivated the lisinopril today for cough."
     lis = next(s for s in clinical.active() if s.value.startswith("lisinopril"))
     _verdict(clinical, monkeypatch, text,
-             {"facts": [{"n": 2, "verdict": "ends", "quote": "Lisinopril was stopped today for cough"}]},
+             {"facts": [{"n": 2, "verdict": "ends", "quote": "Pharmacy inactivated the lisinopril today for cough"}]},
              first=[{**_STOP_LISINOPRIL, "target_id": lis.id}])
     assert _meds(clinical) == ["metformin 1000 mg BID"] and not clinical.pending()
 
@@ -349,3 +350,65 @@ def test_a_nurse_note_still_applies_a_clear_change(clinical):
     clinical._apply({**_STOP_LISINOPRIL, "target_id": lis.id}, "Lisinopril was stopped today for cough.",
                     source="nurse note")
     assert _meds(clinical) == ["metformin 1000 mg BID"]
+
+
+# ── long notes: a hedge in copied-forward text ──
+
+_COPIED = ("Copied forward from 10/29: if the cough persists we may stop lisinopril. Metformin unchanged. "
+           "Today: ")
+
+
+def test_a_hedge_in_copied_forward_text_does_not_hold_a_plain_stop(clinical, monkeypatch):
+    lis = next(s for s in clinical.active() if s.value.startswith("lisinopril"))
+    _say(clinical, monkeypatch, _COPIED + "Lisinopril discontinued today for cough.",
+         {**_STOP_LISINOPRIL, "target_id": lis.id})
+    assert _meds(clinical) == ["metformin 1000 mg BID"] and not clinical.pending()
+
+
+@pytest.mark.parametrize("today", [
+    "Lisinopril 10 mg daily remains on the list.",            # the latest mention says nothing happened
+    "Lisinopril discontinued if the cough persists.",         # the latest mention is itself hedged
+    "Lisinopril held for now.",                               # a hold, not a stop
+])
+def test_a_latest_mention_that_is_not_a_plain_change_still_asks(clinical, monkeypatch, today):
+    lis = next(s for s in clinical.active() if s.value.startswith("lisinopril"))
+    _say(clinical, monkeypatch, _COPIED + today, {**_STOP_LISINOPRIL, "target_id": lis.id})
+    assert "lisinopril 10 mg daily" in _meds(clinical)
+
+
+def test_a_new_item_still_judges_the_whole_note(clinical, monkeypatch):
+    """New list items keep the whole-message check: plain-sentence misreadings were new items."""
+    _say(clinical, monkeypatch, "If the rash returns we may add a steroid. Cephalexin 500 mg started today.",
+         {"action": "ADD", "subject": "active_medication", "value": "cephalexin 500 mg QID"})
+    assert "cephalexin 500 mg QID" not in _meds(clinical) and clinical.pending()
+
+
+def test_a_drug_name_containing_a_marker_is_not_sarcasm(clinical, monkeypatch):
+    """"lol" inside "metoprolol" made every metoprolol change wait for a person."""
+    from vayl.memory.reconcile import SARCASM_MARKERS, has
+    assert not has("metoprolol increased to 100 mg", SARCASM_MARKERS)
+    assert has("sure he'll quit smoking lol", SARCASM_MARKERS)
+
+
+def test_a_refinement_that_drops_the_old_value_asks(monkeypatch):
+    """Haiku refined "atrial fibrillation" to "rapid AF" from "admitted for rapid AF"."""
+    monkeypatch.setattr(llm_memory, "SLOT_SCHEMA", _preset("clinical"))
+    monkeypatch.setattr(llm_memory, "_TRUSTED_SOURCES", ("seed",))
+    m = LLMMemory()
+    m._apply({"action": "ADD", "subject": "primary_diagnosis", "value": "atrial fibrillation", "confidence": 0.95,
+              "kind": "state", "time_ref": "present"}, "AF", source="seed")
+    af = m.active()[0]
+    _say(m, monkeypatch, "Admitted obs for rapid AF after a viral thing.",
+         {"action": "REFINE", "subject": "primary_diagnosis", "value": "rapid AF", "target_id": af.id})
+    assert [s.value for s in m.active()] == ["atrial fibrillation"] and m.pending()
+
+
+def test_a_new_list_item_that_says_it_ended_is_not_added(monkeypatch):
+    monkeypatch.setattr(llm_memory, "SLOT_SCHEMA", _preset("support"))
+    monkeypatch.setattr(llm_memory, "_TRUSTED_SOURCES", ("seed",))
+    m = LLMMemory()
+    m._apply({"action": "ADD", "subject": "entitlement", "value": "10 GB storage", "confidence": 0.95,
+              "kind": "state", "time_ref": "present"}, "10 GB storage", source="seed")
+    _say(m, monkeypatch, "Phone support removed for Pro customers, no exceptions.",
+         {"action": "ADD", "subject": "entitlement", "value": "phone support removed; retired for Pro customers"})
+    assert [s.value for s in m.active() if s.subject == "entitlement"] == ["10 GB storage"]
