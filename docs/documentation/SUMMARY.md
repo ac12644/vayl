@@ -2,7 +2,7 @@
 
 * [Welcome to Vayl](README.md)
 * [Why Vayl](why-vayl/README.md)
-  * [Memory for AI agents that can't be wrong](why-vayl/memory-for-ai-agents-that-cant-be-wrong.md)
+  * [Memory for AI agents that must not be silently wrong](why-vayl/memory-for-ai-agents-that-cant-be-wrong.md)
   * [Why your agent's memory returns stale facts](why-vayl/why-your-agents-memory-returns-stale-facts.md)
   * [Auditable, gated memory for high-stakes AI agents](why-vayl/auditable-gated-memory-for-high-stakes-ai-agents.md)
 

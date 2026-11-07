@@ -3,8 +3,8 @@
  "totals": {
   "UNSAFE": 0,
   "WRONG": 0,
-  "AUTO": 1553,
-  "QUEUED": 216,
+  "AUTO": 1557,
+  "QUEUED": 212,
   "PARTIAL": 0,
   "MISSED": 0,
   "OK": 279
@@ -687,19 +687,16 @@
      "time_ref": "past"
     }
    ],
-   "outcome": "QUEUED",
+   "outcome": "AUTO",
    "mode": "auto",
    "active_meds": [
-    "metformin",
-    "warfarin"
+    "metformin"
    ],
    "code": "full code",
-   "queue_remove": [
-    "warfarin"
-   ],
+   "queue_remove": [],
    "queue_add": [],
    "queue_code": null,
-   "auto_applied": 0
+   "auto_applied": 1
   },
   {
    "case": "stop_patient_reported",
@@ -1502,19 +1499,16 @@
      "time_ref": "past"
     }
    ],
-   "outcome": "QUEUED",
+   "outcome": "AUTO",
    "mode": "auto",
    "active_meds": [
-    "metformin",
-    "warfarin"
+    "metformin"
    ],
    "code": "full code",
-   "queue_remove": [
-    "warfarin"
-   ],
+   "queue_remove": [],
    "queue_add": [],
    "queue_code": null,
-   "auto_applied": 0
+   "auto_applied": 1
   },
   {
    "case": "h_discontinue_reason",

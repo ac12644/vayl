@@ -273,9 +273,17 @@ class Store:
                 log.warning("embedding unavailable (%s); recall degrades to lexical ranking", type(e).__name__)
         to_insert = [s for s in m.statements if s.id not in loaded]
         to_update = [s for s in m.statements if s.id in loaded and (s.status.value, s.value) != loaded[s.id]]
+        # When a fact stopped being current, so the record can answer "what was true on date X".
+        # Kept in metadata: no column, no migration. A row retired before its first save gets the save time.
+        now = time.time()
+        for s in to_insert + to_update:
+            was_current = (loaded[s.id][0] == Status.ACTIVE.value if s.id in loaded
+                           else s.status is Status.SUPERSEDED)    # an archived or rejected row never was
+            if s.status in (Status.SUPERSEDED, Status.HISTORICAL) and was_current \
+                    and not (s.metadata or {}).get("retired_at"):
+                s.metadata = {**(s.metadata or {}), "retired_at": now}
         with self.db.transaction():   # inserts + updates land atomically, or not at all
             if to_insert:
-                now = time.time()
                 self.db.executemany(
                     "INSERT INTO statements "
                     "(user_id,id,slot,subject,value,scope,status,supersedes,confidence,raw,seq,embedding,agent_id,run_id,metadata,subject_hmac,created_at,source,tenant_id,head,relation,tail) "

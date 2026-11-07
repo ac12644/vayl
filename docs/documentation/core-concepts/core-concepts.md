@@ -47,7 +47,7 @@ The model proposes an action. `_apply` in `memory/llm_memory.py` makes the final
 | `ADD` | New `ACTIVE` fact. | A new slot with no competing value, a new item on a list slot, or an event. |
 | `SUPERSEDE` | Old fact becomes `SUPERSEDED`, new fact `ACTIVE`. | A new value for a slot that already holds a different one. This includes an `ADD` the model mislabelled (see the [same-slot invariant](#the-same-slot-invariant)). |
 | `RETRACT` | Old fact becomes `SUPERSEDED`, plus a `HISTORICAL` tombstone. The slot is left empty. | A removal with no replacement: "we dropped Sentry". Also every `forget` call. |
-| `REFINE` | Updates the targeted fact's value in place. | Same fact, more detail. |
+| `REFINE` | Updates the targeted fact's value, keeping the same fact id. The earlier wording stays in history. | Same fact, more detail. |
 | `DEDUP` | Nothing stored. | The same value is already active in the same slot and scope, a past fact is already archived, a proposal is already pending, or the [dedup prefilter](#dedup-prefilter) matched. |
 | `COEXIST` | New `ACTIVE` fact beside the existing one. | Same subject, different **scope**: `state = Zustand` for `web`, `state = MobX` for `mobile`. |
 | `FLAG` | New fact stored as `FLAGGED_CONFLICT`. The current value stands. | See [When a fact is flagged](#when-a-fact-is-flagged). |
@@ -60,7 +60,7 @@ Real results from `remember`:
 Stored: [ADD] state = Redux
 Stored: [SUPERSEDE] state = Zustand
 Stored: [ARCHIVE] billing = monthly
-Stored: [FLAG] primary_database = Postgres
+Not applied, flagged for review: [FLAG] primary_database = Postgres
 Not stored (hypothetical, sarcasm, or nothing to change): state = Jotai
 No durable fact found (looked like chatter or a question).
 ```
@@ -183,7 +183,7 @@ set_reconcile_policy("AUTHORITY", {"crm": 2, "bot": 1}, user_id="org")
 → Reconciliation policy for this space set to AUTHORITY.  authority ranks: {'crm': 2, 'bot': 1}
 
 remember("…plan is Pro", user_id="org", source="crm")   → Stored: [ADD] plan = Pro
-remember("…plan is Free", user_id="org", source="bot")  → Stored: [FLAG] plan = Free
+remember("…plan is Free", user_id="org", source="bot")  → Not applied, flagged for review: [FLAG] plan = Free
 ```
 
 ## Provenance

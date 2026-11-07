@@ -34,7 +34,9 @@ Declaring a slot also carries two properties the rest of the system reads:
                 would leave two anticoagulants active) is proposed. "earned": "auto" only while the
                 current extractor has earned it on this slot (enough decided changes, few later
                 corrected); until then, and for any new extractor, clear changes are queued and
-                tagged as ones it would have applied. VAYL_CONFIRM_MODE overrides
+                tagged as ones it would have applied. "removal": a new list item applies at once,
+                and only removing or changing an existing one waits for a person, for a slot like
+                allergies where a late addition is the hazard. VAYL_CONFIRM_MODE overrides
                 the mode for every gated slot. Reconciliation is driven by an LLM reading
                 conversational text, and "stop the warfarin" appearing in a sentence is not the
                 same as an order to stop it. For most slots being wrong is recoverable; for some
@@ -93,6 +95,9 @@ class SlotSpec:
     confirm_mode: str = ""      # "review" (a person approves every change) or "auto" (clear changes apply)
     multi: bool = False         # holds MANY concurrent values (an allergy list, a med list)
     aliases: list = field(default_factory=list)
+    holds: bool = True          # "hold/continue/keep" in a value means no change (a med list); false for
+                                # a list where those words are ordinary ("AAPL holding 300 shares")
+    future: bool = False        # values describe the future (goals): a future-tense value is current
 
     @property
     def keys(self):
@@ -141,6 +146,21 @@ class SlotSchema:
         """
         return self._by_key.get(_norm(subject))
 
+    def resolve_qualified(self, subject):
+        """A gated slot reached through a qualifying name: "whitfield_kyc_status" is `kyc_status`.
+
+        Left free-form, such a fact sits beside the slot and skips its gate. The prefix may name the
+        owner or someone else entirely ("john_parke_plan", "payment_plan"), so a caller must hold the
+        write for a person, never apply it. Bare aliases like "status" are too loose to count.
+        """
+        norm = _norm(subject)
+        for s in self.slots:
+            if s.confirm or s.confirm_mode == "removal":
+                for key in (s.name, *(a for a in s.aliases if "_" in a)):
+                    if norm.endswith("_" + _norm(key)):
+                        return s
+        return None
+
     def canonical(self, subject):
         """The canonical slot name for `subject`, or `subject` unchanged if undeclared."""
         spec = self.resolve(subject)
@@ -178,7 +198,12 @@ class SlotSchema:
             "thing lands in the same slot and reconciles against it:\n"
             + "\n".join(lines)
             + "\nIf a fact does not fit any declared slot, name it freely as usual. Do NOT force "
-              "an unrelated fact into a declared slot because it is the closest match.")
+              "an unrelated fact into a declared slot because it is the closest match. Never put "
+              "a person's or account's name in front of a declared subject: write kyc_status, not "
+              "whitfield_kyc_status. A fact that changes a declared slot goes in that slot even "
+              "when the text tells it as a story, an attribution or a confirmation number. The "
+              "slots describe the one person or account this record belongs to, so leave out facts "
+              "about anyone else, such as a relative, a roommate or a customer with a similar name.")
 
 
 # ── loading ──────────────────────────────────────────────────────────────────
@@ -190,9 +215,10 @@ def _confirm(value, slot):
         return ""
     if value is True or value in ("review", "true"):
         return "review"
-    if value in ("auto", "earned"):
+    if value in ("auto", "earned", "removal"):
         return value
-    raise ValueError(f"slot {slot!r}: confirm must be true, false, \"review\", \"auto\" or \"earned\", "
+    raise ValueError(f"slot {slot!r}: confirm must be true, false, \"review\", \"auto\", \"earned\" or "
+                     f"\"removal\", "
                      f"not {value!r}")
 
 
@@ -207,10 +233,11 @@ def from_dict(obj):
             description=str(raw.get("description") or ""),
             category=str(raw.get("category") or ""),
             verbatim=bool(raw.get("verbatim", False)),
-            confirm=_confirm(raw.get("confirm", False), name) != "",
+            confirm=_confirm(raw.get("confirm", False), name) not in ("", "removal"),
             confirm_mode=_confirm(raw.get("confirm", False), name),
             multi=bool(raw.get("multi", False)),
             aliases=[str(a) for a in (raw.get("aliases") or [])],
+            holds=bool(raw.get("holds", True)), future=bool(raw.get("future", False)),
         ))
     names = {s.name for s in slots}
     constraints = []

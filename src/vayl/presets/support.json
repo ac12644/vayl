@@ -1,14 +1,16 @@
 {
-  "_note": "Built-in customer-support preset. Enable with VAYL_SLOT_SCHEMA=preset:support. Lower-stakes than clinical/finance, so nothing is confirm-gated — support facts change often and should apply immediately. Issues, preferences, and entitlements are lists.",
+  "_note": "Built-in customer-support preset. Enable with VAYL_SLOT_SCHEMA=preset:support. Plan, account status and entitlements are confirm \"auto\": a clear change applies at once and is marked in history, and an uncertain one waits for a person. Issues and preferences apply immediately. Issues, preferences, and entitlements are lists.",
   "slots": [
     {
       "name": "plan",
       "description": "the customer's current subscription plan",
+      "confirm": "auto",
       "aliases": ["subscription", "tier", "pricing_plan"]
     },
     {
       "name": "account_status",
       "description": "the customer's account status (active, suspended, churned)",
+      "confirm": "auto",
       "aliases": ["status", "account_state"]
     },
     {
@@ -27,6 +29,7 @@
       "name": "entitlement",
       "description": "a feature or entitlement the customer has",
       "multi": true,
+      "confirm": "auto",
       "aliases": ["feature", "entitlements", "feature_flag"]
     }
   ]

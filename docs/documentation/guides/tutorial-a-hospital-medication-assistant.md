@@ -155,7 +155,7 @@ print(m.pending_changes())
 ```
 
 ```
-Stored: [FLAG] active_medication = warfarin 7 mg PO daily
+Not applied, flagged for review: [FLAG] active_medication = warfarin 7 mg PO daily
 1 change(s) awaiting approval:
   #4 REPLACE active_medication: 'warfarin 5 mg PO daily' -> 'warfarin 7 mg PO daily'
         said: 'Increase warfarin to 7 mg PO daily'

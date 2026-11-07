@@ -309,16 +309,21 @@ def remember(text: str, user_id: str = "default", agent_id: str = "", run_id: st
         _metrics.record_actions([a.value for a, _s, _v in results])
         _audit.record("remember", user_id, agent_id, run_id,
                       (f"[{source}] " if source else "")
-                      + ("; ".join(f"{a.value} {s}" for a, s, v in results) or "no durable fact"))
+                      + ("; ".join(f"{a.value} {s}={v}" for a, s, v in results) or "no durable fact"))
         # SKIP is the engine declining to record something (a hypothetical, sarcasm, a removal with
         # nothing to remove) — reporting it under "Stored:" told the caller the opposite.
-        stored = [(a, s, v) for a, s, v in results if a.value != "SKIP"]
+        # A FLAG took no effect, so "Stored:" would tell an agent the new value is current.
+        stored = [(a, s, v) for a, s, v in results if a.value not in ("SKIP", "FLAG")]
+        flagged = [(a, s, v) for a, s, v in results if a.value == "FLAG"]
         skipped = [(s, v) for a, s, v in results if a.value == "SKIP"]
-        if not stored and not skipped:
+        if not stored and not skipped and not flagged:
             return "No durable fact found (looked like chatter or a question)."
         out = []
         if stored:
             out.append("Stored: " + "; ".join(f"[{a.value}] {s} = {v}" for a, s, v in stored))
+        if flagged:
+            out.append("Not applied, flagged for review: "
+                       + "; ".join(f"[{a.value}] {s} = {v}" for a, s, v in flagged))
         if skipped:
             out.append("Not stored (hypothetical, sarcasm, or nothing to change): "
                        + "; ".join(f"{s} = {v}" for s, v in skipped))

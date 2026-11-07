@@ -581,3 +581,24 @@ def test_reproject_all_graphs_replays_every_tenant(tmp_path):
     g.wipe()
     assert st.reproject_all_graphs() == 2
     assert {ns.split("\x1f")[0] for _h, _r, _t, ns, _s in g.edges} == {"acme", "globex"}
+
+
+def test_a_retired_fact_records_when_it_stopped_being_current(tmp_path):
+    db = str(tmp_path / "vayl.db")
+    st = Store(db)
+    m = LLMMemory()
+    m._apply(fact(value="Redux"), "we use Redux")
+    oid = m.active()[0].id
+    st.save("u1", m)
+    m = st.load("u1")
+    m._apply(fact(action="SUPERSEDE", value="Zustand", target_id=oid), "switched to Zustand")
+    st.save("u1", m)
+    old = next(s for s in st.history_statements("u1") if s.value == "Redux")
+    assert old.status is Status.SUPERSEDED and old.metadata.get("retired_at")
+    # the current fact, and a past fact recorded as past (never current), carry none
+    m = st.load("u1")
+    m._apply(fact(subject="framework", value="Angular", time_ref="past"), "we used Angular in 2019")
+    st.save("u1", m)
+    assert not (st.load("u1").active()[0].metadata or {}).get("retired_at")
+    past = [s for s in st.history_statements("u1") if s.value == "Angular"]
+    assert past and not (past[0].metadata or {}).get("retired_at")

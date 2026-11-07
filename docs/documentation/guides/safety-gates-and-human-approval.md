@@ -63,7 +63,7 @@ Some writes are themselves the hazard: "we should probably stop the warfarin" in
 
 ```python
 remember(text="Increase warfarin to 7 mg PO daily", user_id="patient_42")
-# Stored: [FLAG] active_medication = warfarin 7 mg PO daily
+# Not applied, flagged for review: [FLAG] active_medication = warfarin 7 mg PO daily
 
 pending_changes(user_id="patient_42")
 ```
@@ -94,9 +94,10 @@ A gated slot has a mode, set with `"confirm"` in the schema:
 | --- | --- |
 | `"auto"` | A clear change applies at once and is marked `auto_applied` in history. Only an uncertain one waits in the queue. |
 | `"review"` or `true` | Every change waits for a person. |
+| `"removal"` | A new list item applies at once. Removing or changing an existing one waits for a person. |
 | `false` | No gate. |
 
-In the clinical preset, `active_medication` is `"auto"` and `code_status` is `"review"`. `VAYL_CONFIRM_MODE=review` (or `auto`) overrides the mode for every gated slot, for a deployment whose policy requires sign-off on everything.
+In the clinical preset, `active_medication` and `primary_diagnosis` are `"auto"`, `code_status` is `"review"`, and `allergy` is `"removal"`, because a new allergy must show immediately but losing a recorded one is dangerous. `VAYL_CONFIRM_MODE=review` (or `auto`) overrides the mode for every gated slot, for a deployment whose policy requires sign-off on everything.
 
 In `"auto"` mode a change waits for a person instead of applying when any of these holds:
 

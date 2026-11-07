@@ -25,7 +25,7 @@ remember("Patient is on warfarin 5 mg daily for atrial fibrillation.")
 remember("Allergic to penicillin, causes hives.")
   Stored: [ADD] allergy = penicillin, causes hives
 remember("Warfarin stopped today. Started apixaban 5 mg twice daily.")
-  Stored: [FLAG] active_medication = apixaban 5 mg twice daily; …
+  Not applied, flagged for review: [FLAG] active_medication = apixaban 5 mg twice daily; …
 
 confirm_change(4, decided_by="Dr. Okafor, verified with pharmacy")
   Approved #4: SUPERSEDE active_medication = apixaban 5 mg twice daily
