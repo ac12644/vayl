@@ -3700,7 +3700,7 @@
      {
       "op": "add",
       "slot": "entitlement",
-      "match": "3 projects|3 project|three projects",
+      "match": "3 projects|3 project|three projects|project limit 3",
       "needs_human": true
      }
     ],

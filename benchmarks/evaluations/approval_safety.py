@@ -48,6 +48,7 @@ def _trial(case, facts, behaviour, linked):
     base = {"scope": "global", "confidence": 0.9, "kind": "state", "time_ref": "present"}
     llm_memory.llm_extract_classify = lambda t, c: [{**base, **f} for f in facts]
     llm_memory.llm_verdict = lambda *a, **k: []   # recordings hold the first pass only
+    llm_memory._ESCALATE = ""                       # and no escalation check
     m = live._seed()
     m.add(case[1])
     if _two_anticoagulants(m):

@@ -35,3 +35,4 @@ def _no_verdict_call(monkeypatch):
     and switch it back on themselves."""
     from vayl.memory import llm_memory
     monkeypatch.setattr(llm_memory, "_VERDICT", False)
+    monkeypatch.setattr(llm_memory, "_ESCALATE", "")   # the escalation check is a model call too

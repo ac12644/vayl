@@ -33,7 +33,7 @@ def summary(path):
             "lenient": sum(r.get("perfect_lenient", r["perfect"]) for r in rows),
             "severe": sum(len(r["end"].get("severe", [])) for r in rows),
             "lost": sum(len(r["end"]["lost"]) for r in rows), "stale": sum(len(r["end"]["stale"]) for r in rows),
-            "forbidden": sum(len(r["end"]["forbidden"]) for r in rows),
+            "forbidden": sum(len(r["end"].get("forbidden_new", r["end"]["forbidden"])) for r in rows),
             # other people's facts kept under their own names, outside the owner's slots: the asked-for
             # behaviour, counted for context and not an error (none landed in an owner's slot on 2026-11-06)
             "others_kept": other, "errors": sum(r["errors"] for r in rows),

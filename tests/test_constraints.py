@@ -85,7 +85,7 @@ def test_a_message_that_breaks_the_rule_has_all_its_in_scope_changes_taken_back(
     """Every change was clear on its own and auto-applied; together they leave two anticoagulants, so
     all three come off the record, the warfarin stop included."""
     m = _chart(monkeypatch)
-    _say(m, monkeypatch, "Stop warfarin. Start apixaban and rivaroxaban.",
+    _say(m, monkeypatch, "Stop warfarin. Start apixaban 5 mg BID and rivaroxaban 20 mg daily.",
          {"action": "RETRACT", "subject": MED, "value": "warfarin 5 mg daily", "target_id": 1},
          {"action": "ADD", "subject": MED, "value": "apixaban 5 mg BID"},
          {"action": "ADD", "subject": MED, "value": "rivaroxaban 20 mg daily"})

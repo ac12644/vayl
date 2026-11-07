@@ -412,3 +412,131 @@ def test_a_new_list_item_that_says_it_ended_is_not_added(monkeypatch):
     _say(m, monkeypatch, "Phone support removed for Pro customers, no exceptions.",
          {"action": "ADD", "subject": "entitlement", "value": "phone support removed; retired for Pro customers"})
     assert [s.value for s in m.active() if s.subject == "entitlement"] == ["10 GB storage"]
+
+
+@pytest.mark.parametrize("decision,meds,left", [
+    ("apply", ["metformin 1000 mg BID"], 0),                              # stronger model confirms: applied
+    ("reject", ["lisinopril 10 mg daily", "metformin 1000 mg BID"], 0),   # it says no: dropped
+    ("unsure", ["lisinopril 10 mg daily", "metformin 1000 mg BID"], 1),   # undecided: stays proposed, old value stands
+])
+def test_an_escalated_proposal_is_decided_without_a_person(clinical, monkeypatch, decision, meds, left):
+    monkeypatch.setattr(llm_memory, "_ESCALATE", "stub")
+    monkeypatch.setattr(llm_memory, "llm_escalate", lambda text, pairs, *a, **k: {1: decision})
+    lis = next(s for s in clinical.active() if s.value.startswith("lisinopril"))
+    _say(clinical, monkeypatch, "Lisinopril discontinued if the cough persists.", {**_STOP_LISINOPRIL, "target_id": lis.id})
+    assert sorted(_meds(clinical)) == meds and len(clinical.pending()) == left
+
+
+def test_escalation_never_decides_pasted_text(clinical, monkeypatch):
+    monkeypatch.setattr(llm_memory, "_ESCALATE", "stub")
+    monkeypatch.setattr(llm_memory, "llm_escalate", lambda *a, **k: pytest.fail("pasted text was escalated"))
+    lis = next(s for s in clinical.active() if s.value.startswith("lisinopril"))
+    monkeypatch.setattr(llm_memory, "llm_extract_classify",
+                        lambda *a, **k: [{**_STOP_LISINOPRIL, "target_id": lis.id}])
+    clinical.add("Lisinopril discontinued today.", source="pasted")
+    assert clinical.pending()
+
+
+# ── deterministic rules that held up on the full replay ──
+
+def test_a_refinement_that_drops_the_dose_waits(clinical, monkeypatch):
+    lis = next(s for s in clinical.active() if s.value.startswith("lisinopril"))
+    _say(clinical, monkeypatch, "Lisinopril is for blood pressure.",
+         {"action": "REFINE", "subject": "active_medication", "value": "lisinopril daily for blood pressure",
+          "target_id": lis.id})
+    assert "lisinopril 10 mg daily" in _meds(clinical)
+
+
+def test_continue_in_copied_forward_text_does_not_block_a_stop(clinical, monkeypatch):
+    _say(clinical, monkeypatch, "Cough noted. Stay on the lisinopril for now.",
+         {"action": "ADD", "subject": "symptom", "value": "dry cough"})
+    lis = next(s for s in clinical.active() if s.value.startswith("lisinopril"))
+    _say(clinical, monkeypatch, "Cough noted. Stay on the lisinopril for now. Lisinopril discontinued today, cough persists.",
+         {**_STOP_LISINOPRIL, "target_id": lis.id})
+    assert _meds(clinical) == ["metformin 1000 mg BID"]
+
+
+@pytest.mark.parametrize("now,applied", [
+    (["metformin 1000 mg BID"], True),                              # independent reading: lisinopril gone
+    (["metformin 1000 mg BID", "lisinopril 10 mg daily"], False),   # it says lisinopril is still on
+    ([], False),                                                    # metformin vanished too: no agreement on the list
+])
+def test_the_blind_judge_applies_only_what_it_reads_independently(clinical, monkeypatch, now, applied):
+    monkeypatch.setattr(llm_memory, "_ESCALATE", "stub")
+    monkeypatch.setattr(llm_memory, "_call_anthropic",
+                        lambda *a, **k: {"fields": [{"field": "active_medication", "values": now}]})
+    lis = next(s for s in clinical.active() if s.value.startswith("lisinopril"))
+    _say(clinical, monkeypatch, "Lisinopril discontinued if the cough persists.", {**_STOP_LISINOPRIL, "target_id": lis.id})
+    assert ("lisinopril 10 mg daily" not in _meds(clinical)) is applied
+
+
+def test_the_blind_judge_does_not_take_a_dose_it_did_not_read(clinical, monkeypatch):
+    monkeypatch.setattr(llm_memory, "_ESCALATE", "stub")
+    monkeypatch.setattr(llm_memory, "_call_anthropic", lambda *a, **k: {"fields": [
+        {"field": "active_medication", "values": ["metformin 1000 mg BID", "lisinopril 20 mg daily"]}]})
+    lis = next(s for s in clinical.active() if s.value.startswith("lisinopril"))
+    _say(clinical, monkeypatch, "If BP stays high we may go to lisinopril 40 mg; for now 20 mg daily.",
+         {"action": "SUPERSEDE", "subject": "active_medication", "value": "lisinopril 40 mg daily", "target_id": lis.id})
+    assert "lisinopril 40 mg daily" not in _meds(clinical)
+
+
+def test_the_blind_judge_agrees_on_a_single_value_by_change_not_wording(monkeypatch):
+    monkeypatch.setattr(llm_memory, "SLOT_SCHEMA", _preset("finance"))
+    m = LLMMemory()
+    m._apply({"action": "ADD", "subject": "kyc_status", "value": "pending", "confidence": 0.95, "kind": "state",
+              "time_ref": "present"}, "pending", source="seed")
+    p = type("P", (), {"metadata": {"pending": "SUPERSEDE"}, "value": "PASS - CIP screens clean (case 88421)"})()
+    assert llm_memory._agrees(p, "pending", ["verified"], False)
+    assert not llm_memory._agrees(p, "pending", ["pending"], False)
+
+
+def test_an_auto_applied_stop_the_blind_reading_disputes_goes_back_to_a_proposal(clinical, monkeypatch):
+    monkeypatch.setattr(llm_memory, "_ESCALATE", "stub")
+    monkeypatch.setattr(llm_memory, "_call_anthropic", lambda *a, **k: {"fields": [
+        {"field": "active_medication", "values": ["metformin 1000 mg BID", "lisinopril 10 mg daily"]}]})
+    lis = next(s for s in clinical.active() if s.value.startswith("lisinopril"))
+    _say(clinical, monkeypatch, "Lisinopril discontinued today for cough.", {**_STOP_LISINOPRIL, "target_id": lis.id})
+    assert "lisinopril 10 mg daily" in _meds(clinical)
+    assert [(p.metadata or {}).get("why") for p in clinical.pending()] == ["independent reading disagrees"]
+
+
+def test_an_auto_applied_add_the_blind_reading_confirms_stays(clinical, monkeypatch):
+    monkeypatch.setattr(llm_memory, "_ESCALATE", "stub")
+    monkeypatch.setattr(llm_memory, "_call_anthropic", lambda *a, **k: {"fields": [{"field": "active_medication",
+        "values": ["metformin 1000 mg BID", "lisinopril 10 mg daily", "atorvastatin 20 mg nightly"]}]})
+    _say(clinical, monkeypatch, "Atorvastatin 20 mg nightly started today.",
+         {"action": "ADD", "subject": "active_medication", "value": "atorvastatin 20 mg nightly"})
+    assert "atorvastatin 20 mg nightly" in _meds(clinical) and not clinical.pending()
+
+
+def test_an_auto_applied_stop_the_blind_reading_confirms_stays(clinical, monkeypatch):
+    monkeypatch.setattr(llm_memory, "_ESCALATE", "stub")
+    monkeypatch.setattr(llm_memory, "_call_anthropic", lambda *a, **k: {"fields": [
+        {"field": "active_medication", "values": ["metformin 1000 mg BID"]}]})
+    lis = next(s for s in clinical.active() if s.value.startswith("lisinopril"))
+    _say(clinical, monkeypatch, "Lisinopril discontinued today for cough.", {**_STOP_LISINOPRIL, "target_id": lis.id})
+    assert _meds(clinical) == ["metformin 1000 mg BID"] and not clinical.pending()
+
+
+def test_a_shared_word_is_not_the_same_list_item():
+    """"daily" made "Lipitor 20 mg daily" count as naming "Januvia 100 mg daily", so a confirmed stop was undone."""
+    assert not llm_memory._same_item("Lipitor 20 mg daily", "Januvia 100 mg daily")
+    assert llm_memory._same_item("sitagliptin (Januvia) 100 mg", "Januvia 100 mg daily")
+
+
+@pytest.mark.parametrize("value,kind,cur,reading,multi,agrees", [
+    ("CKD staged G4 A3", "SUPERSEDE", "CKD stage 3", ["CKD stage G4 A3"], False, True),
+    ("morphine intolerance, anaphylactoid", "REFINE", "morphine", ["morphine"], True, True),
+    ("181 GOOG total", "SUPERSEDE", "GOOG 150 shares", ["GOOG 181 shares", "CRWD 90 shares"], True, True),
+    ("Eliquis (apixaban) 5 mg BID, #60 with 3 refills", "ADD", "", ["Eliquis 5 mg BID"], True, True),
+    ("Januvia 100 mg daily", "RETRACT", "Januvia 100 mg daily", ["Lipitor 20 mg daily"], True, True),
+    ("lisinopril 40 mg daily", "SUPERSEDE", "lisinopril 10 mg daily", ["lisinopril 20 mg daily"], True, False),
+    ("Full code", "SUPERSEDE", "DNR", ["DNR"], False, False),
+    ("standard seat limit", "ADD", "", ["20 projects"], True, False),
+    ("400 shares BRK.B", "RETRACT", "400 shares BRK.B", ["1,500 shares NVDA"], True, True),
+    ("$50,000 face 6-month T-bill", "RETRACT", "$50,000 face 6-month T-bill", ["$50,000 SWVXX money market"], True, True),
+    ("800 shares GBTC", "RETRACT", "800 shares GBTC", ["IBIT (bought with proceeds of the 800 GBTC sale)"], True, True),
+])
+def test_an_independent_reading_is_matched_by_meaning_not_wording(value, kind, cur, reading, multi, agrees):
+    p = type("P", (), {"value": value, "metadata": {"pending": kind}})()
+    assert llm_memory._agrees(p, cur, reading, multi) is agrees

@@ -50,6 +50,25 @@ vCoff and vC2 replay one logged Haiku draw through the code, so their difference
 | R19 pasted or retrieved text only proposes | Unit tests across 3 presets × 4 sources | Keep (`VAYL_PROPOSE_ONLY_SOURCES`) |
 | R20 `retired_at` | Set in the row metadata when a fact leaves ACTIVE, so no migration is needed; covered by `tests/test_store.py` | Keep |
 
+## Automatic mode: no person answers (2026-11-07)
+
+A blind Sonnet 5.5 check (`VAYL_ESCALATE_MODEL=claude-sonnet-5-5`, off by default) replaces the reviewer. It never sees the proposal: it reads the message and states each affected field as it stands now, and code applies a change only when that reading agrees. It decides the proposals and also re-checks every change the gates applied by themselves on a gated slot; a change it does not agree with goes back to a proposal and the old value stands. Pasted or retrieved text is never decided this way.
+
+Replays of the same logged Haiku draws (short and long notes, both sets, 270 runs), with the scorer fixes below:
+
+| Who decides | Perfect | Severe | Stale | Wrong values written | Questions |
+| --- | --- | --- | --- | --- | --- |
+| Perfect person | 248 | 7 | 0 | 4 | 363 |
+| Nobody: proposals stay pending | 125 | 74 | 150 | 1 | 0 |
+| Sonnet judge shown the proposal | 234 | 14 | 2 | 11 | 0 |
+| Blind check, all gated changes | 236 | 11 | 5 | 10 | 0 |
+
+6 of the blind check's 11 severe errors are one disputed case (`h_c02`: a 5-day cephalexin course still running, which the answer key says is not a current medication and every model reads as one). Most of its remaining failures are shared with the perfect person (extractor misses and answer-key rewordings). One extra Sonnet call per message that changes a gated slot.
+
+What did not work: a stricter judge prompt (holds true changes, so DNR stayed current after a restoration); rules for future or temporary wording, numbers absent from the message, and re-adds (the held proposals were right 41/46, 31/42 and 14/14 times). A judge shown the proposal approves nearly all of them, as LLM validators are known to.
+
+Scorer fixes (they change older numbers in this file): negated values ("no text alerts") no longer match, rewordings are followed through REFINE chains, a value merely left stale is not also counted as a forbidden write, and rejected proposals or missed re-adds are not counted as wrong removals. A perfect person's draw scores 243 instead of 239 on the fixed scorer.
+
 ## Guards, after all changes
 
 - Scripted extractor: 135/135 perfect, in all three configs on both sets.

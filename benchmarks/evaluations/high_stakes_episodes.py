@@ -29,9 +29,16 @@ def _word(needle, hay):
     return re.search(rf"(?<![a-z0-9]){re.escape(needle.strip().lower())}(?![a-z0-9])", hay.lower()) is not None
 
 
+_NEG = re.compile(r"(?:^|[^a-z])(?:no|not|never|without|turned off)\s+$")
+_NEG_AFTER = re.compile(r"^\s+(?:turned off|disabled|off)(?![a-z])")
+
+
 def _hits(value, match):
-    """A match starts on a word boundary but may run on: "webhook" matches "webhooks", "3 year" "3 years"."""
-    return any(alt.strip() and re.search(rf"(?<![a-z0-9]){re.escape(alt.strip().lower())}", value.lower())
+    """A match starts on a word boundary but may run on: "webhook" matches "webhooks", "3 year" "3 years".
+    A negated mention does not match: "no text alerts" is not "text alerts"."""
+    v = value.lower()
+    return any(alt.strip() and any(not _NEG.search(v[:m.start()]) and not _NEG_AFTER.search(v[m.end():])
+                                   for m in re.finditer(rf"(?<![a-z0-9]){re.escape(alt.strip().lower())}", v))
                for alt in match.split("|"))
 
 
@@ -45,6 +52,7 @@ class Truth:
     def __init__(self, record):
         self.items = [(e["slot"], e["value"]) for e in record]
         self.gone = []
+        self.ever_gone = []   # every item the author ever removed, to tell a missed re-add from a wrong removal
 
     def apply(self, changes):
         for c in changes:
@@ -52,6 +60,7 @@ class Truth:
                 out = [i for i in self.items if i[0] == c["slot"] and _hits(i[1], c["match"])]
                 self.items = [i for i in self.items if i not in out]
                 self.gone += out
+                self.ever_gone += out
         for c in changes:
             if c["op"] == "add":
                 self.items.append((c["slot"], c["match"]))
@@ -63,7 +72,11 @@ class Truth:
 def _review(m, truth, stats, q=0.0, rng=None):
     """Approve a proposal only if the record the author expects agrees with it; a group is all or nothing.
     With `q` > 0 the reviewer is fallible: a wrong group is approved anyway with probability q, the
-    rate at which people in studies let a wrong AI suggestion through."""
+    rate at which people in studies let a wrong AI suggestion through. `q` None: nobody answers, and
+    proposals stay pending (the old value stays current)."""
+    if q is None:
+        stats["unanswered"] = len(m.pending())
+        return
     by_id = {s.id: s for s in m.statements}
 
     def right(p):
@@ -76,6 +89,8 @@ def _review(m, truth, stats, q=0.0, rng=None):
         group = m.group(m.pending()[0].id)
         stats["asked"] += 1
         ok = all(right(p) for p in group)
+        why = (group[0].metadata or {}).get("why", "")
+        stats.setdefault("by_why", {}).setdefault(why, [0, 0])[0 if ok else 1] += 1   # [right, wrong]
         if not ok and q and rng.random() < q:
             stats["wrong_approved"] = stats.get("wrong_approved", 0) + 1
             ok = True
@@ -101,13 +116,25 @@ def _state(m, truth, step_forbidden, slots, others=(), seen=None, gated=()):
     free = [c for c in current if c[0] not in slots]
     lost = [(s, v) for s, v in truth.items if not _holds(current, s, v)]
     # a lost item some current row once held, before a rewording: true, only said differently
+    by_id = {x.id: x for x in m.statements}
+
+    def lineage(x):   # the row and every row it superseded or refined, so a REFINE chain counts as one fact
+        out, cur = [], x
+        while cur is not None and cur.id not in {o.id for o in out}:
+            out.append(cur)
+            cur = by_id.get(cur.supersedes)
+        return out
     reworded = [(s, v) for s, v in lost if seen and any(
-        x.subject == s and any(_hits(old, v) for old in seen.get(x.id, ())) for x in m.active())]
+        x.subject == s and any(_hits(old, v) for y in lineage(x) for old in seen.get(y.id, ())) for x in m.active())]
     # a lost item that was on the record and is now retired: removed by mistake, not merely missed
     removed = [(s, v) for s, v in lost if (s, v) not in reworded and any(
-        x.subject == s and _hits(x.value, v) for x in m.statements if x.status is not Status.ACTIVE)]
+        x.subject == s and _hits(x.value, v) for x in m.statements
+        if x.status is not Status.ACTIVE and not (x.metadata or {}).get("pending")   # never applied
+        and (x.metadata or {}).get("resolved") != "rejected")
+        and not any(g[0] == s and _hits(g[1], v) for g in truth.ever_gone)]   # removed once rightly: a missed re-add
     forbidden = [f["match"] for f in step_forbidden
                  if any(c[0] == f["slot"] and _hits(c[1], f["match"]) and not truth.has(*c) for c in current)]
+    stale = [c[1] for c in current if any(c[0] == s and _hits(c[1], v) for s, v in truth.gone) and not truth.has(*c)]
     return {
         "free": len(free),
         "free_rows": free,
@@ -119,8 +146,9 @@ def _state(m, truth, step_forbidden, slots, others=(), seen=None, gated=()):
         "reworded": [v for s, v in reworded],
         # severe: a trap written into a declared slot, or a true item on a gated slot removed by mistake
         "severe": forbidden + [v for s, v in removed if s in gated],
-        "stale": [c[1] for c in current if any(c[0] == s and _hits(c[1], v) for s, v in truth.gone)
-                  and not truth.has(*c)],
+        "stale": stale,
+        # a forbidden value that is merely the old, stale one is counted once, as stale (it stays severe)
+        "forbidden_new": [f for f in forbidden if not any(_hits(c, f) for c in stale)],
         "current": [c for c in current if c[0] in slots],
     }
 
@@ -154,7 +182,7 @@ def run(episode, config, extractor="model", q=0.0, replay=None, seed=0, pad=0):
     stats = {"asked": 0, "approved": 0, "rejected": 0}
     forbidden, steps, errors = [], [], 0
     seen = {}                                        # statement id -> every value it has held
-    for step in episode["steps"]:
+    for n, step in enumerate(episode["steps"]):
         t0 = time.perf_counter()
         before = {(s.subject, s.value) for s in m.active()}
         ops_log, verdict_log = [], []
@@ -162,10 +190,13 @@ def run(episode, config, extractor="model", q=0.0, replay=None, seed=0, pad=0):
             ops = correct_ops({"changes": _plain(step["changes"], m)}, m)
             llm_memory.llm_extract_classify = lambda t, c, *a, o=ops, **k: o
             llm_memory.llm_verdict = lambda *a, **k: []
+            llm_memory._ESCALATE = ""   # the scripted extractor runs offline
         elif replay is not None:
-            logged_ops = [dict(o) for o in replay[len(steps)].get("ops", [])]
+            logged_ops = [dict(o) for o in replay[n].get("ops", [])]
+            ops_log.extend(dict(o) for o in logged_ops)
             llm_memory.llm_extract_classify = lambda t, c, *a, o=logged_ops, **k: [dict(x) for x in o]
-            logged_v = [dict(o) for o in replay[len(steps)].get("verdict", [])]
+            logged_v = [dict(o) for o in replay[n].get("verdict", [])]
+            verdict_log.extend(dict(o) for o in logged_v)
             llm_memory.llm_verdict = lambda *a, o=logged_v, **k: [dict(x) for x in o]
         else:
             def verdict(*a, **k):
@@ -180,6 +211,7 @@ def run(episode, config, extractor="model", q=0.0, replay=None, seed=0, pad=0):
                 return out
             llm_memory.llm_extract_classify = logged
         llm_memory._LAST_REPLY.update(text="", stop="")
+        llm_memory._ESC_LOG.clear()
         text = step["message"]
         prior = [s["message"] for s in episode["steps"][:episode["steps"].index(step)]]
         if pad and prior:
@@ -205,12 +237,14 @@ def run(episode, config, extractor="model", q=0.0, replay=None, seed=0, pad=0):
                        and _holds(before, c["slot"], c["match"])
                        and not _holds({(s.subject, s.value) for s in m.active()}, c["slot"], c["match"])]
         _review(m, truth, stats, q, rng)
-        steps.append({"actions": [f"{a.value} {s}={v}" for a, s, v in actions], "ops": ops_log, "verdict": verdict_log,
+        steps.append({"actions": [f"{a.value} {s}={v}" for a, s, v in actions], "ops": ops_log, "verdict": verdict_log, "escalation": list(llm_memory._ESC_LOG),
                       "raw": llm_memory._LAST_REPLY["text"], "stop": llm_memory._LAST_REPLY["stop"],
                       "ms": round((time.perf_counter() - t0) * 1000), "unreviewed": unreviewed,
                       "unapproved": unapproved, "needs_human": sum(bool(c.get("needs_human")) for c in step["changes"])})
     others = {n for step in episode["steps"] for n in step.get("other_people", [])}
     end = _state(m, truth, forbidden, slots, others, seen, gated)
+    for k in ("confirmed_by", "rejected_by"):
+        stats[f"escalation_{k[:-3]}"] = sum((s.metadata or {}).get(k) == "escalation" for s in m.statements)
     perfect = not (end["forbidden"] or end["lost"] or end["stale"]) and not errors
     # lenient: a true item that is still current, only reworded, is not counted as lost
     lenient = not (end["forbidden"] or set(end["lost"]) - set(end["reworded"]) or end["stale"]) and not errors
@@ -228,6 +262,7 @@ def main():
     ap.add_argument("--trials", type=int, default=1)
     ap.add_argument("--tag", default="", help="suffix for the results file, so phases don't overwrite each other")
     ap.add_argument("--q", type=float, default=0.0, help="chance the reviewer approves a wrong proposal")
+    ap.add_argument("--no-reviewer", action="store_true", help="nobody answers; proposals stay pending")
     ap.add_argument("--pad", type=int, default=0, help="copy earlier notes forward to this many characters")
     ap.add_argument("--replay", default="", help="a results file whose logged extractions are fed back")
     args = ap.parse_args()
@@ -247,7 +282,7 @@ def main():
         for i, rp in enumerate(runs):
             if rp is not None and any("error" in st for st in rp):
                 continue                      # a failed call has no extraction to replay
-            rows.append(run(e, args.config, args.extractor, args.q, rp, seed=i, pad=args.pad))
+            rows.append(run(e, args.config, args.extractor, None if args.no_reviewer else args.q, rp, seed=i, pad=args.pad))
             r = rows[-1]
             print(f"{r['id']:8} perfect={r['perfect']!s:5} lenient={r['perfect_lenient']!s:5} "
                   f"severe={len(r['end']['severe'])} asked={r['asked']} rejected={r['rejected']} "
