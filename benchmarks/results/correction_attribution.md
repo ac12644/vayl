@@ -2,7 +2,7 @@
 
 `benchmarks/evaluations/correction_attribution.py`, run 2026-10-22. No model calls. Each trial auto-applies one medication change (a dose change, a start or a stop) and then a follow-up write arrives. The follow-up is labelled by hand as a **correction** (the auto-apply was wrong) or a **change** (the world moved on). There are 11 scenarios over 5 drugs, so 55 trials.
 
-The baseline is the signal used in the revert-rate literature and in the closest patents: any later write that touches an auto-applied write counts as an error of it.
+The baseline is the signal used in the revert-rate literature and in the closest prior work: any later write that touches an auto-applied write counts as an error of it.
 
 | Scenario | Truth | Vayl flags | Naive flags |
 | --- | --- | --- | --- |
