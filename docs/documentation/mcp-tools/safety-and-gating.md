@@ -117,6 +117,8 @@ Lists proposed changes to **confirm-required** slots (slots declared with `"conf
 Approve with confirm_change(memory_id), discard with reject_change(memory_id).
 ```
 
+A new item proposed for a list slot that already has entries shows as `ADD active_medication: 'apixaban 5mg bid'`; `confirm_change` adds it next to the existing items.
+
 A `REMOVE` shows the value that would be removed; there is no new value. An empty queue returns `No changes awaiting approval.`
 
 ## confirm\_change

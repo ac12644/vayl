@@ -755,9 +755,13 @@ def pending_changes(user_id: str = "default", agent_id: str = "", run_id: str = 
             proposed = (s.metadata or {}).get("pending", "?")
             cur = next((t.value for t in m.active() if t.id == s.supersedes), "(unknown)")
             change = (f"REMOVE {s.subject}: {cur!r}" if proposed == "RETRACT"   # no new value to show
+                      else f"ADD {s.subject}: {s.value!r}" if proposed == "ADD"     # nothing replaced
                       else f"REPLACE {s.subject}: {cur!r} -> {s.value!r}")
+            dup = llm_memory.duplicate_anticoagulant(m, s)
             lines.append(f"  #{s.id} {change}"
-                         + (f"\n        said: {s.raw[:120]!r}" if s.raw else ""))
+                         + (f"\n        said: {s.raw[:120]!r}" if s.raw else "")
+                         + (f"\n        ⚠ approving this leaves two anticoagulants active: {', '.join(map(repr, dup))}"
+                            " is current and not proposed for removal" if dup else ""))
         return (f"{len(rows)} change(s) awaiting approval:\n" + "\n".join(lines)
                 + "\n\nApprove with confirm_change(memory_id), discard with reject_change(memory_id).")
     return _guard("pending_changes", go, cap=C.READ, space=user_id)
@@ -792,6 +796,8 @@ def confirm_change(memory_id: int, user_id: str = "default", agent_id: str = "",
         who = _approver(decided_by)
         with _store.db.space_lock(_space_key(user_id, agent_id, run_id)):
             m = _store.load(user_id, agent_id, run_id)
+            proposal = next((p for p in m.pending() if p.id == memory_id), None)
+            dup = llm_memory.duplicate_anticoagulant(m, proposal) if proposal is not None else []
             res = m.confirm(memory_id, source=who)
             if res is None:
                 return (f"#{memory_id} is not awaiting approval. It may have been decided already, "
@@ -801,7 +807,10 @@ def confirm_change(memory_id: int, user_id: str = "default", agent_id: str = "",
             action, subject, value = res
             _audit.record("confirm_change", user_id, agent_id, run_id,
                           f"#{memory_id} {action.value} {subject} by {who}")
-        return f"Approved #{memory_id}: {action.value} {subject} = {value}"
+        # A warning, not a block: overlapping anticoagulants can be intended, and a person decided.
+        warn = (f"\n⚠ {', '.join(map(repr, dup))} is still active: two anticoagulants are now current. "
+                "Remove it if this was a switch." if dup else "")
+        return f"Approved #{memory_id}: {action.value} {subject} = {value}{warn}"
     return _guard("confirm_change", go, cap=C.APPROVE, space=user_id)
 
 

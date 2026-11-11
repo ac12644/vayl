@@ -6,6 +6,7 @@ reach these through the module (`llm_client._embed(...)`), so a test stubs each 
 """
 import contextlib
 import contextvars
+import io
 import json
 import os
 import random
@@ -52,6 +53,12 @@ def single_attempt():
         _RETRIES.reset(token)
 
 
+def _permanent(status, body):
+    """A 429 that no amount of waiting fixes: the account is out of credits or quota. Retrying it with
+    backoff made every call hang for minutes before failing; it should fail now, with its reason."""
+    return status == 429 and any(k in body for k in ("insufficient_quota", "credit_balance_exhausted"))
+
+
 def _http_json(req, timeout, retries=None):
     retries = _RETRIES.get() if retries is None else retries
     for i in range(retries):
@@ -59,7 +66,8 @@ def _http_json(req, timeout, retries=None):
             if _POOL is not None:
                 r = _POOL.request(req.get_method(), req.full_url, body=req.data,
                                   headers=dict(req.headers), timeout=timeout)
-                if r.status in (429, 500, 502, 503) and i < retries - 1:
+                if (r.status in (429, 500, 502, 503) and i < retries - 1
+                        and not _permanent(r.status, r.data[:2000].decode("utf-8", "replace"))):
                     time.sleep(_retry_after(r.headers, i)); continue
                 if r.status >= 400:
                     raise urllib.error.HTTPError(req.full_url, r.status,
@@ -69,9 +77,17 @@ def _http_json(req, timeout, retries=None):
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 return json.loads(r.read())
         except urllib.error.HTTPError as e:
+            if e.code == 429:
+                body = ""                                        # urlopen errors carry the body in
+                with contextlib.suppress(Exception):             # the stream, pool errors in .msg
+                    body = e.read().decode("utf-8", "replace")
+                body = body or str(e.msg or "")
+                if _permanent(e.code, body):
+                    raise urllib.error.HTTPError(e.url, e.code, e.msg, e.headers, io.BytesIO(body.encode())) from None
+                e = urllib.error.HTTPError(e.url, e.code, e.msg, e.headers, io.BytesIO(body.encode()))
             if e.code in (429, 500, 502, 503) and i < retries - 1:
                 time.sleep(_retry_after(e.headers, i)); continue
-            raise
+            raise e
         except (urllib.error.URLError, TimeoutError):  # reset / transient / slow-local-model timeout
             if i < retries - 1:
                 time.sleep(min(2 ** i, 20) + random.random()); continue

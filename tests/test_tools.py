@@ -234,3 +234,20 @@ def test_the_server_tells_clients_when_to_use_memory():
     text = s.mcp.instructions or ""
     for word in ("`remember`", "`recall`", "`forget`", "include_history"):
         assert word in text
+
+
+def test_the_review_tools_warn_before_two_anticoagulants_become_current(uid, monkeypatch):
+    from vayl.memory.schema import load as load_schema
+    monkeypatch.setattr(llm_memory, "SLOT_SCHEMA", load_schema("preset:clinical"))
+    shapes = {"On warfarin 5 mg daily.": [{"action": "ADD", "subject": "active_medication",
+                                           "value": "warfarin 5 mg daily", "confidence": 0.95}],
+              "Now on Eliquis 5 mg BID.": [{"action": "ADD", "subject": "active_medication",
+                                            "value": "Eliquis 5 mg BID", "confidence": 0.95}]}
+    monkeypatch.setattr(llm_memory, "llm_extract_classify", lambda text, active: shapes[text])
+    s.remember("On warfarin 5 mg daily.", user_id=uid)
+    s.remember("Now on Eliquis 5 mg BID.", user_id=uid)
+    queue = s.pending_changes(user_id=uid)
+    assert "ADD active_medication: 'Eliquis 5 mg BID'" in queue and "two anticoagulants" in queue
+    pid = int(queue.split("#")[1].split()[0])
+    approved = s.confirm_change(memory_id=pid, user_id=uid)
+    assert approved.startswith(f"Approved #{pid}: ADD") and "'warfarin 5 mg daily' is still active" in approved

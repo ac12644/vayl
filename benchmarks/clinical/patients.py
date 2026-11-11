@@ -95,12 +95,14 @@ MARGARET = {
         "critical_present": ["penicillin", "sulfa"],          # BOTH allergies coexist + reachable
         "one_current_metformin": "metformin 1000 mg PO BID",
         "events_coexist": ["fall_event_day2", "procedure_day4"],
-        "pending_awaiting_review": 2,                          # warfarin hold + code-status -> DNR
+        "pending_awaiting_review": 3,                          # warfarin hold, code-status -> DNR, and
+        # the levofloxacin start: a new drug joining a non-empty med list from the (untrusted)
+        # ehr_feed waits for approval too, so a misread order can never add an active drug
         # a proposed medication STOP must not remove the drug until approved: warfarin stays current
         # while its removal waits. a proposed code-status CHANGE is the opposite: DNR is not current
         # until approved, full code stands.
         "held_still_current": ["warfarin"],
-        "proposed_not_current": ["DNR"],
+        "proposed_not_current": ["DNR", "levofloxacin"],
     },
 }
 
@@ -350,10 +352,13 @@ TED = {
         "history_not_current": ["myocardial infarction in 2019", "prior smoker"],
         # after both approvals, code status is back to full (the reversal completed)
         "after_workflow_current": ["Full code"],
-        # the discharge IV-furosemide retract is ALSO gated and left for pharmacy — it stays pending
-        "after_workflow_pending": 1,
-        # discharge med rec: IV furosemide held for approval, PO furosemide active
+        # left for pharmacy: the discharge IV-furosemide retract, the PO furosemide that would replace
+        # it, and metoprolol (a second drug joining the admission list) — every change to a non-empty
+        # med list from the untrusted ehr_feed waits for approval
+        "after_workflow_pending": 3,
+        # discharge med rec: IV furosemide stays current until a person approves the switch
         "held_still_current": ["furosemide 40 mg IV BID"],
+        "proposed_not_current": ["metoprolol", "furosemide 40 mg PO daily"],
     },
 }
 

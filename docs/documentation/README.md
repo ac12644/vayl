@@ -39,7 +39,7 @@ recall("Can we give amoxicillin?")
 ```
 
 {% hint style="info" %}
-**Captured from a real run** with `gpt-6-luna`, `VAYL_SLOT_SCHEMA=preset:clinical` and `VAYL_CRITICAL_CATEGORIES=critical`. The `Stored:` and `Approved` lines are Vayl's own output. The `recall` answers are written by the model, so their wording varies. The allergy reaches the last answer because critical facts go into every answer. The whole flow is in [Tutorial: a hospital medication assistant](guides/tutorial-a-hospital-medication-assistant.md).
+**Captured from a real run** with `gpt-6-luna`, `VAYL_SLOT_SCHEMA=preset:clinical`, `VAYL_CRITICAL_CATEGORIES=critical` and `VAYL_CONFIRM_MODE=review`, so the switch waits for a clinician. Without `review`, the preset applies a clear switch like this one at once. The `Stored:` and `Approved` lines are Vayl's own output. The `recall` answers are written by the model, so their wording varies. The allergy reaches the last answer because critical facts go into every answer. The whole flow is in [Tutorial: a hospital medication assistant](guides/tutorial-a-hospital-medication-assistant.md).
 {% endhint %}
 
 Why this matters, and how it differs from memory that only appends: [Why Vayl](why-vayl/README.md).

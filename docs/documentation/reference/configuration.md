@@ -130,6 +130,7 @@ With no model variables set, Vayl uses a local Ollama and nothing leaves the mac
 | `VAYL_CRITICAL_CATEGORIES` | unset | Comma-separated fact categories that bypass ranking and always reach recall and `safe_recall` (case-insensitive). The bundled `clinical` and `finance` presets tag their critical slots `critical`. |
 | `VAYL_CRITICAL_BUDGET` | `200` | Maximum number of critical facts per read. Above it the read fails (`CriticalOverflow`) instead of silently dropping some. |
 | `VAYL_TRUSTED_SOURCES` | unset | Comma-separated `source` values whose changes skip the confirmation gate, for authorized feeds such as `fhir,hl7` (case-insensitive). Since 0.6.0, only a key whose principal name equals the source, or a caller with the `approve` capability, may write with that source. |
+| `VAYL_CONFIRM_MODE` | unset | `review` or `auto`, for every confirm-gated slot, overriding each slot's own `confirm`. `review` queues every change for approval; `auto` applies clear changes and queues uncertain ones. Unset uses the schema (the clinical preset: medications `auto`, code status `review`). Any other value fails at startup. |
 
 The prefilter only skips when re-extraction is provably a no-op. If any fact from that utterance is no longer active, it falls through to the extractor, so a restatement that should supersede is never missed. See [Safety gates and human approval](../guides/safety-gates-and-human-approval.md) for slot schemas, critical categories and trusted sources in context.
 

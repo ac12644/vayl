@@ -17,16 +17,16 @@ The reconciling memory layer for AI agents.
 When a fact changes, most agent memory keeps both versions and lets the model guess which is current. Vayl replaces the old value, keeps it in history, and can hold high-stakes changes until a person approves them. It runs locally on SQLite and works with any MCP client: Claude Code, Cursor, Claude Desktop, or your own agent.
 
 <p align="center">
-  <img src="assets/vayl-demo.gif" alt="A real run with a fictional patient: warfarin is recorded, then replaced by apixaban. The change waits in pending_changes until a clinician confirms it. Recall then answers apixaban now, warfarin before, and refuses amoxicillin because of the recorded penicillin allergy." width="860">
+  <img src="assets/vayl-demo.gif" alt="A real run with a fictional patient: warfarin is recorded, then replaced by apixaban. With approval required (VAYL_CONFIRM_MODE=review), the change waits in pending_changes until a clinician confirms it. Recall then answers apixaban now, warfarin before, and refuses amoxicillin because of the recorded penicillin allergy." width="860">
 </p>
 
-<p align="center"><sub>A real run with <code>gpt-6-luna</code> and the clinical preset. The patient is fictional. Script: <a href="assets/demo/clinical_demo.py"><code>assets/demo/clinical_demo.py</code></a></sub></p>
+<p align="center"><sub>A real run with <code>gpt-6-luna</code> and the clinical preset, with every change set to wait for approval. The patient is fictional. Script: <a href="assets/demo/clinical_demo.py"><code>assets/demo/clinical_demo.py</code></a></sub></p>
 
 ## Features
 
 - **Reconciles changes.** A new value supersedes the old one, and "we stopped X" retracts X. A retired fact is never returned as current.
 - **Keeps history.** Ask what is true now or what was true before. Every change goes on a signed, tamper-evident audit chain.
-- **Human approval where it matters.** Mark slots such as medications as confirm-required, and changes wait in a queue. `check_before_act` blocks an action that depends on a disputed, stale or just-changed fact.
+- **Automatic, with a person in the loop only when it matters.** On gated slots such as medications, a clear change applies by itself and an uncertain one (hedged, negated, or one that would leave two anticoagulants active) waits for approval; set `VAYL_CONFIRM_MODE=review` to approve every change. `check_before_act` blocks an action that depends on a disputed, stale or just-changed fact.
 - **Small and local.** SQLite by default, Postgres for teams. One model call to store a fact and one to answer. Any OpenAI-compatible model, Anthropic, Groq or a local Ollama model.
 - **Built-in presets** for clinical, support, finance, sales, coding and assistant memory.
 

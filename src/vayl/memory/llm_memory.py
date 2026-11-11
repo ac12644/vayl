@@ -488,7 +488,83 @@ def _ctx_line(s):
     return f'{line} ("{raw[:300]}")' if raw else line
 
 
-_LIST_ID_CUT = re.compile(r"\s+[—–-]\s+|\s\d")
+_LIST_ID_CUT = re.compile(r"\s+[—–-]\s+|\s\d|[;,]")
+_PAREN = re.compile(r"\s*\([^)]*\)")
+_TRAILING = re.compile(r"(?:\s+(?:to|at|from|by|now|increased|decreased|reduced|raised|lowered))+$")
+# A hold, a continue or a keep is not a change: per FHIR a held drug is still an active medication
+# ("on-hold"), and "continue warfarin" says it stays. On a gated list such a value is never an entry.
+_NO_CHANGE = re.compile(r"(?<![a-z])(?:hold|held|holding|on hold|pause[ds]?|paused|suspend(?:ed)?|continue[ds]?"
+                        r"|continuing|keep|keeping|remain on|stay on|restart(?:ed)?|resume[ds]?)(?![a-z])")
+# Clinical stop language. Not "hold": a hold is a pause expected to resume (FHIR "on-hold").
+_STOP_WORDS = re.compile(r"(?<![a-z])(?:stop|stopped|stopping|discontinue|discontinued|d/c(?:'?d)?|dc'?(?:e?d)"
+                         r"|cease|ceased|taken off|came off|come off|(?:been|is|was|went|now) off|off since"
+                         r"|no longer (?:taking|on))(?![a-z])")
+
+
+# Synonyms a model has returned for an action (gpt-5-mini: "RETIRE"). An unknown action used to raise
+# and lose every fact in the message; a removal or replacement word maps to its action, anything else
+# is FLAGged for a person instead of guessed.
+_ACTION_SYNONYMS = {"RETIRE": "RETRACT", "REMOVE": "RETRACT", "DELETE": "RETRACT", "STOP": "RETRACT",
+                    "DISCONTINUE": "RETRACT", "REPLACE": "SUPERSEDE", "UPDATE": "SUPERSEDE",
+                    "CHANGE": "SUPERSEDE", "SWITCH": "SUPERSEDE"}
+
+
+def _action(raw):
+    """(Action, exact): exact is False when the action was mapped from a synonym or unknown."""
+    name = str(raw or "ADD").strip().upper()
+    if name in Action.__members__:
+        return Action(name), True
+    try:
+        return Action(_ACTION_SYNONYMS[name]), False
+    except KeyError:
+        log.warning("extractor returned an unknown action %r; flagging the fact for review", name)
+        return Action.FLAG, False
+
+
+_SWITCH_FROM = r"(?:switch(?:ed|ing)?|chang(?:e|ed|ing)|transition(?:ed|ing)?|convert(?:ed|ing)?)\s+(?:[a-z']+\s+){0,2}from\s+"
+_STOP_PHRASE = (r"(?:stop|stopped|stopping|discontinue|discontinued|d/c(?:'?d)?|dc'?(?:e?d)|cease|ceased|taken off"
+                r"|came off|come off|(?:been|is|was|went|now|stays?) off|no longer (?:taking|on)|instead of)")
+
+
+def _stop_named(text, ident):
+    """True if `text` says to stop the drug `ident`: stop language right next to it, within a few words
+    and with no punctuation between, so "stop warfarin, continue metformin" names only warfarin."""
+    t = str(text).lower()
+    d = "(?:" + "|".join(re.escape(n) for n in sorted(_names_for(ident))) + ")"
+    return re.search(rf"(?<![a-z]){_STOP_PHRASE}\s+(?:[a-z']+\s+){{0,3}}{d}(?![a-z])"
+                     rf"|(?<![a-z]){d}\s+(?:[a-z']+\s+){{0,2}}{_STOP_PHRASE}(?![a-z])"
+                     rf"|{_SWITCH_FROM}{d}(?![a-z])", t) is not None
+
+
+# Negated stop language: "do not stop the warfarin", "don't switch her yet". In review mode a missed
+# negation only costs a wrong proposal; in auto mode it would be a wrong removal, so it is checked.
+_NEGATED = re.compile(r"(?<![a-z])(?:do not|don't|dont|never|not to|avoid|no need to|hold off on|without)"
+                      r"\s+(?:[a-z']+\s+){0,2}(?:stop|discontinu|d/c|cease|chang|switch|remov)")
+_CONFIRM_MODE = os.environ.get("VAYL_CONFIRM_MODE", "").strip().lower()
+if _CONFIRM_MODE not in ("", "auto", "review"):
+    raise ValueError(f"VAYL_CONFIRM_MODE must be 'auto' or 'review', not {_CONFIRM_MODE!r}")
+
+
+def _gate_mode(spec):
+    """'auto' or 'review' for a gated slot; VAYL_CONFIRM_MODE overrides the slot's own mode."""
+    return _CONFIRM_MODE or getattr(spec, "confirm_mode", "") or "review"
+
+
+_SLUG = re.compile(r"[a-z0-9]+(?:[_-][a-z0-9]+)*_[a-z0-9-]+")   # snake_case, no spaces
+
+
+def _kept(text, ident):
+    """True if `text` says to continue / keep the drug `ident` ("Continue warfarin, stop metformin")."""
+    d = "(?:" + "|".join(re.escape(n) for n in sorted(_names_for(ident))) + ")"
+    return re.search(rf"(?<![a-z])(?:continue|keep|remain on|stay on|resume|restart)\s+(?:[a-z']+\s+){{0,2}}{d}(?![a-z])",
+                     str(text).lower()) is not None
+
+
+def _names_item(text, item_value):
+    """True if `text` names the list item `item_value` by its identity (the drug or substance name)."""
+    ident = _list_identity(item_value)
+    t = str(text).lower()
+    return bool(ident) and any(re.search(rf"(?<![a-z]){re.escape(n)}(?![a-z])", t) for n in _names_for(ident))
 
 
 def _list_identity(value):
@@ -500,9 +576,36 @@ def _list_identity(value):
     Cutting at the first separator or dose number yields "penicillin" / "warfarin", so a removal or
     change finds the right list member even when the description text differs.
     """
-    v = str(value or "")
+    v = _PAREN.sub("", str(value or ""))
     m = _LIST_ID_CUT.search(v)
-    return (v[:m.start()] if m else v).strip().lower()
+    ident = (v[:m.start()] if m else v).strip().lower()
+    ident = _TRAILING.sub("", ident).strip()          # "metformin to 1000 mg" -> metformin
+    return _GENERIC.get(ident, ident)
+
+
+# Brand names for the drugs where a missed match is most dangerous: oral anticoagulants, where an
+# unrecognised "Coumadin stopped, now on Eliquis" leaves warfarin current beside apixaban. Not a drug
+# dictionary; a deployment that needs one should map names upstream (e.g. RxNorm) before Vayl.
+_GENERIC = {"coumadin": "warfarin", "jantoven": "warfarin", "eliquis": "apixaban", "xarelto": "rivaroxaban",
+            "pradaxa": "dabigatran", "savaysa": "edoxaban", "lixiana": "edoxaban", "lovenox": "enoxaparin"}
+ANTICOAGULANTS = {"warfarin", "apixaban", "rivaroxaban", "dabigatran", "edoxaban", "enoxaparin", "heparin"}
+
+
+def _names_for(ident):
+    """The identity and every brand name that folds onto it."""
+    return {ident} | {b for b, g in _GENERIC.items() if g == ident}
+
+
+def duplicate_anticoagulant(m, proposal):
+    """Active anticoagulants that approving `proposal` would leave beside the one it adds, unless they
+    are themselves proposed for removal. A reviewer approving "add Eliquis" while warfarin is current
+    and its stop was never captured creates exactly the duplication this is here to catch."""
+    new = _list_identity(proposal.value)
+    if new not in ANTICOAGULANTS:
+        return []
+    leaving = {p.supersedes for p in m.pending()} | ({proposal.supersedes} if proposal.supersedes else set())
+    return [s.value for s in m.active() if s.subject == proposal.subject and s.id not in leaving
+            and _list_identity(s.value) in ANTICOAGULANTS and _list_identity(s.value) != new]
 
 
 def _slot_target(active, subject, value, is_multi):
@@ -618,7 +721,52 @@ class LLMMemory:
         # top-k RELEVANT active facts (all of them when the space is small) so write cost stays
         # bounded as memory grows; _apply still reconciles against the full active set.
         candidates = retrieval.embed_retrieve(text, self.active(), k=_RECONCILE_CONTEXT)
-        return [self._apply(o, text, source) for o in llm_extract_classify(text, candidates)]
+        before = {s.id for s in self.statements}
+        results = [self._apply(o, text, source) for o in llm_extract_classify(text, candidates)]
+        self._hold_duplicate_anticoagulants(before)
+        return results + self._stop_sweep(text, source)
+
+    def _hold_duplicate_anticoagulants(self, before):
+        """Backstop for confirm "auto": an anticoagulant auto-added by this message while another
+        stays current (a switch whose stop half the model missed) goes back to the review queue, so a
+        switch applies whole or not at all. Runs after every fact in the message is applied, so a
+        stop and a start in one sentence are judged together."""
+        for s in [x for x in self.active() if x.id not in before and (x.metadata or {}).get("auto_applied")]:
+            ident = _list_identity(s.value)
+            others = [x for x in self.active() if x.subject == s.subject and x.id != s.id
+                      and _list_identity(x.value) in ANTICOAGULANTS and _list_identity(x.value) != ident]
+            if ident in ANTICOAGULANTS and others:
+                rival = next((x for x in self.statements if x.id == s.supersedes), None)
+                if rival is not None and rival.status is Status.SUPERSEDED:
+                    rival.status = Status.ACTIVE          # undo the replacement it made
+                s.status = Status.FLAGGED
+                s.metadata = {**(s.metadata or {}), "auto_applied": None,
+                              "pending": "SUPERSEDE" if rival is not None else "ADD",
+                              "reason": "would leave two anticoagulants active"}
+
+    def _stop_sweep(self, text, source=""):
+        """The last safety net for a gated list: if the sentence itself says to stop a current item
+        ("Warfarin was discontinued yesterday", "she stopped taking her warfarin", "switched from
+        warfarin to apixaban") and no extracted fact proposed that, propose the removal now. The
+        model sometimes files the stop under an invented subject or archives the drug's own value as
+        history, and then the stop is simply lost. Only ever adds a proposal for a person to decide."""
+        if (not SLOT_SCHEMA or str(source or "").lower() in _TRUSTED_SOURCES
+                or has(text, HYPOTHETICAL_MARKERS) or has(text, SARCASM_MARKERS)
+                or _NEGATED.search(str(text).lower())):
+            return []
+        proposed = {p.supersedes for p in self.pending()}
+        out = []
+        for s in list(self.active()):
+            spec = SLOT_SCHEMA.resolve(s.subject)
+            if (spec is None or not (spec.confirm and spec.multi) or s.id in proposed
+                    or not _stop_named(text, _list_identity(s.value))):
+                continue
+            pend = self._mk(f"{s.subject}@{s.scope}", s.subject, s.value, s.scope, status=Status.FLAGGED,
+                            confidence=0.9, raw=text, source=source, supersedes=s.id)
+            pend.metadata = {"pending": Action.RETRACT.value, "category": spec.category or ""}
+            self.statements.append(pend)
+            out.append((Action.FLAG, s.subject, s.value))
+        return out
 
     def forget(self, text, source=""):
         """An explicit 'forget X' must RETRACT — retire the fact — rather than depend on the
@@ -654,7 +802,12 @@ class LLMMemory:
         return sorted([s for s in self.statements if s.subject == subject], key=lambda s: s.id)
 
     def _apply(self, o, text, source=""):
-        act = Action(o.get("action", "ADD")); conf = float(o.get("confidence", 0.5))
+        act, exact = _action(o.get("action", "ADD")); conf = float(o.get("confidence", 0.5))
+        # In a confirm "auto" slot only a CLEAR change applies by itself; anything that sets this
+        # (a guessed action, a rerouted subject, a future-tense order, hedging, negation, low
+        # confidence) still goes to the approval queue.
+        uncertain = not exact
+        auto_applied = False
         # coerce: the LLM occasionally emits null / list / number for a field
         subj = str(o.get("subject") or "unknown")
         val = str(o.get("value") or "(unspecified)")
@@ -670,6 +823,42 @@ class LLMMemory:
             subj = spec.name
         is_multi = spec is not None and spec.multi   # slot holds a LIST (allergies, med list)
         target = next((s for s in self.active() if s.id == o.get("target_id")), None)
+        if target is not None and target.subject != subj and act in (Action.SUPERSEDE, Action.REFINE, Action.RETRACT):
+            # The model pointed at a fact but named a different subject ("metformin_therapy_status"
+            # targeting metformin's row). The change lands on the target, so the target's slot rules
+            # apply: otherwise a gated medication is edited or retired through an ungated name.
+            tspec = SLOT_SCHEMA.resolve(target.subject) if SLOT_SCHEMA else None
+            if tspec is not None and tspec.confirm:
+                spec, subj = tspec, tspec.name
+                is_multi = tspec.multi
+                uncertain = True
+        # ── STOP ON A GATED LIST ──
+        # "Warfarin stopped today" / "D/C warfarin" / a whole "Stop the warfarin." often comes back as
+        # an ADD or an ARCHIVE (the model filing it as history) whose VALUE names an active list item
+        # with stop language. Taken literally that archives a history note or adds the sentence as a
+        # new drug, and the drug stays active. On a confirm-required list it is a removal of the named item, so it goes to the
+        # approval queue below. Runs before the valid-time gate, which would otherwise swallow it. A
+        # hold is not a stop (FHIR "on-hold" vs "stopped"), and hedged or sarcastic text never counts.
+        # It also runs before the event rule: a model that tags a stop kind="event" would otherwise
+        # have it turned into an ADD (events never retract) and archived.
+        if (spec is not None and spec.confirm and is_multi
+                and act in (Action.ADD, Action.COEXIST, Action.REFINE, Action.ARCHIVE, Action.RETRACT)
+                and _STOP_WORDS.search(val.lower()) and not _NEGATED.search(f"{text} {val}".lower())
+                and not has(text, HYPOTHETICAL_MARKERS) and not has(text, SARCASM_MARKERS)):
+            named = [s for s in self.active() if s.subject == subj and _names_item(val, s.value)]
+            if len(named) == 1:
+                act, target, is_event = Action.RETRACT, named[0], False
+            elif len(named) > 1 and act != Action.RETRACT:
+                # "Stop warfarin and metformin." as ONE value: not an entry. _stop_sweep proposes each.
+                return Action.SKIP, subj, val
+            elif not named and act != Action.RETRACT:
+                # "off since 2026-03", "reason_discontinued: AKI": a stop statement that names no current
+                # item is not a list entry. The stop itself is caught by name in _stop_sweep.
+                return Action.SKIP, subj, val
+        if (spec is not None and spec.confirm and is_multi and act == Action.RETRACT
+                and target is not None and target.subject == subj):
+            is_event = False   # the model named the item it removes; an "event" tag can't undo that
+
         if is_event:
             # An event never replaces anything: it is a new thing that happened, not a correction.
             # Forcing this here rather than trusting the extractor means a mislabelled SUPERSEDE on
@@ -697,7 +886,14 @@ class LLMMemory:
             self.statements.append(st)
             return Action.ARCHIVE, subj, val
         if time_ref == "future" and act in (Action.SUPERSEDE, Action.COEXIST, Action.ADD):
-            act = Action.FLAG   # pending — surface it, don't assert it as current
+            # "Increase metformin to 1000 mg" / "Start apixaban" read as future. On a gated slot that is
+            # an order, so it goes to the approval queue below instead of a flag outside it, as long
+            # as the gate will catch it (an ADD to an empty gated slot would otherwise apply now).
+            gated = (spec is not None and spec.confirm and str(source or "").lower() not in _TRUSTED_SOURCES
+                     and (act == Action.SUPERSEDE or any(s.subject == subj for s in self.active())))
+            if not gated:
+                act = Action.FLAG   # pending — surface it, don't assert it as current
+            uncertain = True        # an order for later: a person decides when it takes effect
 
         # ── DETERMINISTIC RETRACT UPGRADE ──
         # A removal the extractor mislabelled ("ServiceA no longer calls ServiceB" coming back as
@@ -747,11 +943,66 @@ class LLMMemory:
         # replacement or removal is PROPOSED: it is recorded as pending, the current value stands
         # untouched, and a person decides. Placed before RETRACT and before the same-slot invariant
         # so it catches both paths.
+        # A verbatim gated list stores values as stated ("apixaban 5 mg twice daily"). A machine slug
+        # there ("held_for_contrast", "acute_kidney_injury") is a status or a reason the model filed
+        # in the wrong slot, not an entry; proposing it put "REPLACE metformin -> held_for_contrast"
+        # in front of a reviewer. The real change, if any, is captured separately.
+        if (spec is not None and spec.confirm and is_multi and getattr(spec, "verbatim", False)
+                and act in (Action.ADD, Action.COEXIST, Action.SUPERSEDE, Action.REFINE)
+                and _SLUG.fullmatch(val.strip().lower())):
+            return Action.SKIP, subj, val
+
+        # Hold / continue / keep values, negated changes, and removing a drug the sentence continues:
+        # none of these is a change to a gated list, in either mode. Skipping keeps the drug as it is.
+        if (spec is not None and spec.confirm and is_multi and str(source or "").lower() not in _TRUSTED_SOURCES
+                and act in (Action.ADD, Action.COEXIST, Action.SUPERSEDE, Action.REFINE, Action.RETRACT)):
+            if act != Action.RETRACT and _NO_CHANGE.search(val.lower()):
+                return Action.SKIP, subj, val
+            if _NEGATED.search(text.lower()):
+                return Action.SKIP, subj, val
+            if act == Action.RETRACT:
+                kept = target or _slot_target(self.active(), subj, val, is_multi)
+                if kept is not None and _kept(text, _list_identity(kept.value)):
+                    return Action.SKIP, subj, val
+        # A restatement with a note ("metformin 500 mg twice daily (restarted)") is not a change.
+        if (spec is not None and spec.confirm and act in (Action.ADD, Action.SUPERSEDE, Action.REFINE)
+                and any(s.subject == subj and canon(_PAREN.sub("", s.value)) == canon(_PAREN.sub("", val))
+                        for s in self.active())):
+            return Action.DEDUP, subj, val
+
+        # An ADD to a gated slot that already holds a value is a change too: on a list it adds a drug
+        # (and, beside a pending stop, can leave two anticoagulants active); on a single slot the
+        # same-slot invariant below would quietly supersede the current value. Only the first write
+        # to an empty gated slot goes through unreviewed (there is nothing to lose yet).
+        gate_add = (act in (Action.ADD, Action.COEXIST)
+                    and any(s.subject == subj for s in self.active()))
         if (spec is not None and spec.confirm
-                and act in (Action.SUPERSEDE, Action.RETRACT, Action.REFINE)
+                and (act in (Action.SUPERSEDE, Action.RETRACT, Action.REFINE) or gate_add)
                 and str(source or "").lower() not in _TRUSTED_SOURCES):
             tgt = target or _slot_target(self.active(), subj, val, is_multi)
-            if tgt is not None:
+            # a list item that names no current entry is a NEW item, even when the model called it a
+            # replacement; otherwise a SUPERSEDE with no identifiable target skipped the gate entirely
+            new_item = tgt is None and is_multi and act in (Action.ADD, Action.COEXIST, Action.SUPERSEDE, Action.REFINE)
+            if gate_add and tgt is not None:
+                act = Action.SUPERSEDE   # names an existing item (a dose change) or a single slot's value
+            uncertain = (uncertain or conf < AUTO_THRESHOLD or has(text, HYPOTHETICAL_MARKERS)
+                         or has(text, SARCASM_MARKERS) or _NEGATED.search(text.lower()) is not None)
+            if _gate_mode(spec) == "auto" and not uncertain and (tgt is not None or new_item):
+                # A clear change on an "auto" slot applies now, below, and is marked auto-applied.
+                target, auto_applied = tgt, True
+                if new_item:
+                    act = Action.ADD
+            elif new_item:
+                # a new item for the list: propose adding it, beside (not instead of) what is there
+                if any(x.subject == subj and (x.metadata or {}).get("pending") == "ADD"
+                       and canon(x.value) == canon(val) for x in self.pending()):
+                    return Action.DEDUP, subj, val
+                pend = self._mk(f"{subj}@{scope}", subj, val, scope,
+                                status=Status.FLAGGED, confidence=conf, raw=text, source=source)
+                pend.metadata = {"pending": "ADD", "category": spec.category or ""}
+                self.statements.append(pend)
+                return Action.FLAG, subj, val
+            elif tgt is not None:
                 # The same change proposed twice is one decision, not two. Without this, repeating
                 # "switch to apixaban" stacked identical rows in the review queue — the same
                 # early-return-without-dedup shape as the valid-time gate. A RETRACT proposal is
@@ -778,9 +1029,12 @@ class LLMMemory:
                                                  status=Status.FLAGGED, confidence=conf, raw=text, source=source))
                 return Action.FLAG, subj, tgt.value
             tgt.status = Status.SUPERSEDED
-            self.statements.append(self._mk(f"{subj}@{scope}", subj, f"(retracted: {tgt.value})", scope,
-                                             status=Status.HISTORICAL, confidence=conf,
-                                             supersedes=tgt.id, raw=text, source=source))   # tombstone for provenance
+            tomb = self._mk(f"{subj}@{scope}", subj, f"(retracted: {tgt.value})", scope,
+                            status=Status.HISTORICAL, confidence=conf,
+                            supersedes=tgt.id, raw=text, source=source)   # tombstone for provenance
+            if auto_applied:
+                tomb.metadata = {"auto_applied": True}
+            self.statements.append(tomb)
             self._gretire(getattr(tgt, "subject", subj))   # drop the edge by subject (head-agnostic)
             self._gwrite(o, Action.RETRACT)
             return Action.RETRACT, subj, tgt.value
@@ -802,6 +1056,8 @@ class LLMMemory:
                 self.statements.append(st)
                 return Action.FLAG, subj, val
             target.value = val; target._emb = None   # value changed -> re-embed on save
+            if auto_applied:
+                target.metadata = {**(target.metadata or {}), "auto_applied": True}
             self._gwrite(o, Action.REFINE); return act, subj, val
         st = self._mk(f"{subj}@{scope}", subj, val, scope, confidence=conf, raw=text, source=source)
         if is_event:
@@ -811,6 +1067,8 @@ class LLMMemory:
             # needs. The extractor already writes this; discarding it paid for the tokens and kept
             # none of the value.
             st.metadata = {**(st.metadata or {}), "reason": str(o.get("reason"))[:200]}
+        if auto_applied:
+            st.metadata = {**(st.metadata or {}), "auto_applied": True}
         if spec is not None and spec.category:
             # Declaring a slot's category is what makes the critical-fact channel usable: an
             # operator names the slots once instead of every caller remembering to tag each write.
@@ -969,6 +1227,16 @@ class LLMMemory:
         if st is None:
             return None
         proposed = (st.metadata or {}).get("pending")
+        if proposed == "ADD":
+            # A new list item: nothing is replaced. If the same value became active meanwhile, adding
+            # it again would duplicate it, so the proposal is stale instead.
+            if any(s.subject == st.subject and canon(s.value) == canon(st.value) for s in self.active()):
+                st.metadata = {**(st.metadata or {}), "pending": None, "resolved": "stale"}
+                return None
+            st.status = Status.ACTIVE
+            st.metadata = {**(st.metadata or {}), "pending": None,
+                           "resolved": "confirmed", "confirmed_by": source or "unknown"}
+            return Action.ADD, st.subject, st.value
         target = next((s for s in self.statements if s.id == st.supersedes), None)
         if target is None or target.status is not Status.ACTIVE:
             # The value it was going to replace is already gone; applying now would resurrect a

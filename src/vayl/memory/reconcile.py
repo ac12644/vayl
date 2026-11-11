@@ -69,7 +69,11 @@ class Statement:
 SYNONYMS = {"postgres": "postgresql", "redux": "redux toolkit", "mongo": "mongodb"}
 
 HYPOTHETICAL_MARKERS = ["what if", "should we", "considering", "thinking about", "maybe",
-                        "might ", "could ", "hypothetically", "not sure", "wondering", "proposal"]
+                        "might ", "could ", "hypothetically", "not sure", "wondering", "proposal",
+                        # clinical hedges and conditionals ("probably stop the warfarin if her INR
+                        # stays high" is a plan, not an order)
+                        "probably", " if ", "consider ", "plan to", "planning to", "may need",
+                        "would "]
 # DEFINITE removal language — the fact ends and nothing takes its place. Every phrase asserts the
 # removal as done, so a hedge ("considering dropping X") is excluded by HYPOTHETICAL_MARKERS and
 # never reaches a RETRACT. Over-deleting a still-true fact is the failure this list has to avoid.
