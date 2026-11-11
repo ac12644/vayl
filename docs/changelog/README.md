@@ -29,7 +29,8 @@ What changed in each Vayl release, newest first. Upgrade notes are on each relea
 
 | Release              | Date        | Highlights                                                                                                             |
 | -------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------- |
-| **v0.10.0** (current) | 22 Oct 2026 | REST routes and generated API reference; memory backends for Google ADK, LlamaIndex and AutoGen |
+| **v0.11.0** (current) | 11 Nov 2026 | Automatic mode for gated changes, constraints in the schema, safer medication changes |
+| v0.10.0 | 22 Oct 2026 | REST routes and generated API reference; memory backends for Google ADK, LlamaIndex and AutoGen |
 | v0.9.1 | 22 Oct 2026 | gpt-6 support, server instructions for MCP clients, clearer model errors |
 | v0.9.0 | 22 Oct 2026 | Python 3.11 minimum; listed in the official MCP Registry |
 | v0.8.0 | 21 Oct 2026 | FastMCP 4 and MCP SDK v2, Python client HTTP fix, clean client shutdown |

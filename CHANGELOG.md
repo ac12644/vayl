@@ -5,6 +5,13 @@ All notable changes to Vayl are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-11-11
+
+Gated changes can now be decided without a person. A second model reads the message without seeing
+the proposed change, and the change applies only when the two agree. Medication changes from free
+text are safe on the clinical preset, constraints across a list are declared in the schema, and a
+verdict pass catches stops and switches the first pass missed. Some defaults changed: see Changed.
+
 ### Fixed
 - **Medication changes from free text wait for approval, as the clinical preset promises.** Measured
   with a real model (`benchmarks/evaluations/med_change_safety.py`), 36–43% of medication-change
@@ -30,8 +37,52 @@ All notable changes to Vayl are documented here. This project adheres to
   provider's reason ("You have no credits remaining").
 - A replacement aimed at a list item that names no current entry is proposed as a new item instead
   of being stored unreviewed.
+- An extraction reply cut off at the token limit now raises instead of being parsed as if complete.
+- An item that ended ("ticket 4411 was resolved", "sold the T-bill") is removed from its list
+  instead of being filed as history beside the still-current item.
+- A refinement keeps the old value in history instead of overwriting it.
+- A hedge is checked in the sentence that carries the change, not anywhere in the message, and text
+  copied forward from an earlier note is judged once, so long notes raise fewer repeat questions.
+- A removal whose own sentence holds or suspends the item ("held for the procedure", "suspended
+  pending investigation") is left undecided, together with any change linked to it.
+- Combination strengths ("5/325 mg") and fractions ("1/2 tablet") are compared as amounts, not
+  read as dates.
 
 ### Added
+- **Automatic mode: a blind check decides gated changes without a person.** For each message that
+  changes a gated slot, a second model (`VAYL_ESCALATE_MODEL`, default `claude-sonnet-5-5` when
+  `ANTHROPIC_API_KEY` is set) reads the message and states those fields as they are now, without
+  seeing what was proposed. A change applies only when that reading agrees with it; otherwise it
+  waits in `pending_changes` and the current value stands. Changes the gates applied by themselves
+  are checked the same way. If the model cannot be reached, nothing is decided and every gated
+  change from that message waits. `VAYL_ESCALATE_VOTES` asks for more than one agreeing reading.
+  `VAYL_ESCALATE_MODEL=off` sends every uncertain change to a person, as before.
+- **Verdict pass (`VAYL_VERDICT`, on by default with a slot schema).** A second call per message
+  checks each current fact in a declared slot against the message: does it end, change or stay?
+  Its answers must quote the message and still pass every gate.
+- **Constraints in the slot schema.** A schema can declare "at most N current items" of a list,
+  optionally within a class (the clinical preset: at most one anticoagulant). Changes from one
+  message that would break a constraint come off the record as one linked proposal, approved or
+  rejected whole. Approval re-checks the constraint against the record as it is then and refuses a
+  break unless overridden. This replaces the hard-coded anticoagulant hold.
+- **`"confirm": "earned"`.** A gated slot applies changes by itself only while the current
+  extractor has earned it on that slot. The evidence is the memory's own history: an automatic
+  write that is later reversed, corrected or edited counts against it. A new model starts in
+  shadow, where its clear changes are queued and tagged as ones it would have applied.
+- **Pasted or retrieved text only proposes.** A change to a declared slot from a `source` listed in
+  `VAYL_PROPOSE_ONLY_SOURCES` (default `pasted,retrieved,web,email,document,tool`) is never applied
+  directly, whatever the slot's confirm mode, because such text may carry planted instructions.
+- `LLMMemory.add(text, owner=...)` tells the extractor whose record it is, with the source and the
+  date, so facts about other people are not filed in the owner's slots.
+- Slot options `holds` (hold words mean "no change" on this list), `future` (a future-tense value
+  is current, for goals) and `phrases` (items are matched by their words, for preferences). On the
+  support preset, a new preference that contradicts one on record ("call me" against "no calls") is
+  checked before it stands.
+- `retired_at` is recorded when a fact stops being current.
+- `VAYL_PROMPT=slim` selects a shorter extraction prompt (experimental).
+- A high-stakes episode harness and episode sets for the clinical, finance and support presets
+  (`benchmarks/evaluations/high_stakes_episodes.py`). The episodes are agent-written and have not
+  been reviewed by a domain expert; see `benchmarks/results/high_stakes_episodes.md`.
 - **Automatic mode for gated slots (`"confirm": "auto"`).** A clear change applies at once and is
   marked `auto_applied` in history; only an uncertain one waits for approval: a hedge, a negation
   ("do not stop the warfarin"), a future-tense order, low confidence, a guessed action or rerouted
@@ -47,6 +98,13 @@ All notable changes to Vayl are documented here. This project adheres to
   Savaysa, Lovenox) match their generic names.
 
 ### Changed
+- **With a slot schema, storing a fact can take up to three model calls** instead of one: the
+  extraction, the verdict pass, and the blind check on messages that change a gated slot. Set
+  `VAYL_VERDICT=off` or `VAYL_ESCALATE_MODEL=off` to drop a call.
+- **With `ANTHROPIC_API_KEY` set and a slot schema in use, the blind check is on by default** and
+  sends the message text to Anthropic, even when another provider does the extraction. Set
+  `VAYL_ESCALATE_MODEL=off` to keep that text with one provider.
+- The default Anthropic model is `claude-haiku-5-5`.
 - On the clinical preset, medications are now on `"auto"`: clear changes apply by themselves, so most
   medication changes no longer need a person. Set `VAYL_CONFIRM_MODE=review` to keep approving every
   change, including adding a second medication. Trusted feeds (`VAYL_TRUSTED_SOURCES`) still apply
@@ -451,6 +509,7 @@ old, removals retract, ambiguous input is flagged, and history stays queryable �
 (`vayl-mcp`) or an authenticated team server (`vayl-server`). SQLite by default, optional Postgres;
 encryption at rest, an Ed25519-signed tamper-evident audit chain, RBAC, and GDPR tools.
 
+[0.11.0]: https://github.com/ac12644/vayl/releases/tag/v0.11.0
 [0.10.0]: https://github.com/ac12644/vayl/releases/tag/v0.10.0
 [0.9.1]: https://github.com/ac12644/vayl/releases/tag/v0.9.1
 [0.9.0]: https://github.com/ac12644/vayl/releases/tag/v0.9.0

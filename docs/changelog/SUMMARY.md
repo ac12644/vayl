@@ -4,6 +4,7 @@
 
 ## 2026
 
+* [v0.11.0 — Automatic mode for gated changes](2026/v0.11.0-automatic-mode-for-gated-changes.md)
 * [v0.10.0 — REST API and memory backends](2026/v0.10.0-rest-api-and-memory-backends.md)
 * [v0.9.1 — gpt-6 and server instructions](2026/v0.9.1-gpt-6-and-server-instructions.md)
 * [v0.9.0 — Python 3.11 and the MCP Registry](2026/v0.9.0-python-3-11-and-mcp-registry.md)
