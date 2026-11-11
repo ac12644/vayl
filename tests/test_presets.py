@@ -129,7 +129,7 @@ def test_a_gated_fact_under_a_qualifying_name_is_a_note_not_a_change():
     base = {"confidence": 0.95, "kind": "state", "time_ref": "present", "scope": "global"}
     saved = llm_memory.SLOT_SCHEMA, llm_memory.llm_extract_classify
     try:
-        for preset, subject, slot, value in [("finance", "whitfield_kyc_status", "kyc_status", "verified"),
+        for preset, subject, _slot, value in [("finance", "whitfield_kyc_status", "kyc_status", "verified"),
                                              ("support", "john_parke_plan", "plan", "Premium"),
                                              ("clinical", "wife_shellfish_allergy", "allergy", "shellfish"),
                                              ("clinical", "kowalski_code_status", "code_status", "DNR")]:

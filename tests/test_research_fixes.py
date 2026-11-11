@@ -710,7 +710,8 @@ def test_phrase_items(a, b, same):
 def test_preference_cases_from_the_fresh_draw(monkeypatch):
     """The three readings a first-word matcher got wrong once preferences were checked (ep_s01, h_s03, h_s01)."""
     monkeypatch.setattr(llm_memory, "SLOT_SCHEMA", _preset("support"))
-    P = lambda v, kind: type("P", (), {"subject": "preference", "value": v, "metadata": {"pending": kind}})()
+    def P(v, kind):
+        return type("P", (), {"subject": "preference", "value": v, "metadata": {"pending": kind}})()
     agrees = llm_memory._agrees
     assert agrees(P("phone desk line for urgent matters; no email contact", "SUPERSEDE"), "email contact only",
                   ["call desk line first for anything urgent", "no email contact"], True)

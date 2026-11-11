@@ -552,7 +552,8 @@ def _same_item(a, b):
     """The same list item by identity or its first meaningful word, not by shared filler: "daily" made
     "Lipitor 20 mg daily" name "Januvia 100 mg daily"."""
     ia, ib = _list_identity(a), _list_identity(b)
-    word = lambda i: re.search(r"[a-z]", i) is not None   # "$50" (from "$50,000 …") names nothing
+    def word(i):   # "$50" (from "$50,000 …") names nothing
+        return re.search(r"[a-z]", i) is not None
     return ((word(ia) and ia == ib) or (word(ib) and _names_item(a, b)) or (word(ia) and _names_item(b, a))
             or (_key(a) != "" and _key(a) == _key(b)) or (_ticker(a) != "" and _ticker(a) == _ticker(b)))
 
@@ -566,7 +567,8 @@ def _words(x):
     """A phrase item's words, each marked by whether it is negated: "Email only, no calls" -> {+email, -call}."""
     s = _WHEN.sub(" ", str(x).lower())
     neg = {w for m in _NEG_SCOPE.finditer(s) for w in re.findall(r"[a-z]{2,}", m.group(1))}
-    stem = lambda w: re.sub(r"(?:ing|ed|s)$", "", w) if len(w) > 4 else w   # "emailing", "emailed" -> email
+    def stem(w):   # "emailing", "emailed" -> email
+        return re.sub(r"(?:ing|ed|s)$", "", w) if len(w) > 4 else w
     return {("-" if w in neg else "+") + stem(w) for w in re.findall(r"[a-z]{2,}", s) if w not in _PHRASE_SKIP}
 
 
@@ -619,7 +621,8 @@ def _agrees(p, cur, values, multi, others=()):
         return any(same_item(v, x) for v in values)
     kind = (p.metadata or {}).get("pending")
     if multi and same_item is _same_phrase:
-        kept = lambda c: any(_restates(v, c) for v in values)   # the old item read again, near word for word
+        def kept(c):   # the old item read again, near word for word
+            return any(_restates(v, c) for v in values)
         if kind == "RETRACT":
             return bool(cur) and not kept(cur)
         # "desk line for urgent; no email" is two items. A new item is read as new: a reading item already on
@@ -629,7 +632,8 @@ def _agrees(p, cur, values, multi, others=()):
         parts = [x for x in p.value.split(";") if _words(x)] or [p.value]
         new = [v for v in values if not any(_same_value(v, o) for o in others)]
         said = set().union(*[_words(v) for v in values]) if values else set()
-        flip = lambda w: ("-" if w[0] == "+" else "+") + w[1:]
+        def flip(w):
+            return ("-" if w[0] == "+" else "+") + w[1:]
         if not any(same_item(v, x) for x in parts for v in new) or any(flip(w) in said for x in parts for w in _words(x)):
             return False
         return not cur or any(_restates(cur, x) for x in parts) or not kept(cur)

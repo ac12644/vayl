@@ -5,7 +5,8 @@ import pytest
 from vayl.memory import llm_memory
 from vayl.memory.llm_memory import ConstraintViolation, LLMMemory, Status
 from vayl.memory.reconcile import Action
-from vayl.memory.schema import from_dict, load as load_schema
+from vayl.memory.schema import from_dict
+from vayl.memory.schema import load as load_schema
 
 MED = "active_medication"
 
