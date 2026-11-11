@@ -523,7 +523,8 @@ ESCALATE_SYS = """You read one message about a person's record and say what some
 at the end of the message, for the record's owner.
 Count only what is true now: not plans, recommendations, questions, conditions or possibilities, not a
 change scheduled for a later date, not facts about other people, and not old copied-forward text that the
-message later contradicts. Start from the CURRENT values given and change them only where the message says so.
+message later contradicts. A change the message says has been made, applied or is in effect counts now even when it
+carries a start date; a date alone does not make it scheduled (you do not know today's date). Start from the CURRENT values given and change them only where the message says so.
 For a list field, give every item that is in effect now, the unchanged ones too.
 Return JSON only: {"fields":[{"field":"<name>","values":["..."]}]}"""
 
@@ -535,10 +536,16 @@ _FILLER = {"the", "a", "an", "total", "new", "current", "standard", "extra", "no
 
 def _key(x):
     """First meaningful word, singular: "181 GOOG total" -> goog, "3 project limit" -> project."""
-    for w in re.findall(r"[a-z][a-z0-9-]+", str(x).lower()):
+    for w in re.findall(r"[a-z][a-z0-9]+", str(x).lower()):   # "business-hours" is business
         if w not in _FILLER and w not in _STOPWORDS:
             return w[:-1] if w.endswith("s") and len(w) > 3 else w
     return ""
+
+
+def _ticker(x):
+    """A ticker-like code naming the item: "(TRN)" anywhere, or a leading all-caps word ("375 TRN")."""
+    m = re.search(r"\(([A-Z][A-Z.]{1,5})\)", str(x)) or re.match(r"[\d,.\s$]*([A-Z][A-Z.]{1,5})\b", str(x))
+    return m.group(1) if m else ""
 
 
 def _same_item(a, b):
@@ -547,7 +554,47 @@ def _same_item(a, b):
     ia, ib = _list_identity(a), _list_identity(b)
     word = lambda i: re.search(r"[a-z]", i) is not None   # "$50" (from "$50,000 …") names nothing
     return ((word(ia) and ia == ib) or (word(ib) and _names_item(a, b)) or (word(ia) and _names_item(b, a))
-            or (_key(a) != "" and _key(a) == _key(b)))
+            or (_key(a) != "" and _key(a) == _key(b)) or (_ticker(a) != "" and _ticker(a) == _ticker(b)))
+
+
+_NEG_SCOPE = re.compile(r"(?<![a-z])(?:no|not|never|without|don'?t|do not|stop|opted out of|opt out of|instead of|rather than)(?![a-z])([^,;.]*)")
+_PHRASE_SKIP = {"no", "not", "never", "without", "don", "do", "stop", "opted", "opt", "out", "the", "and", "for", "by",
+                "via", "of", "to", "in", "on", "at", "only", "instead", "rather", "than", "contact", "prefer", "preference", "preferred", "customer"}
+
+
+def _words(x):
+    """A phrase item's words, each marked by whether it is negated: "Email only, no calls" -> {+email, -call}."""
+    s = _WHEN.sub(" ", str(x).lower())
+    neg = {w for m in _NEG_SCOPE.finditer(s) for w in re.findall(r"[a-z]{2,}", m.group(1))}
+    stem = lambda w: re.sub(r"(?:ing|ed|s)$", "", w) if len(w) > 4 else w   # "emailing", "emailed" -> email
+    return {("-" if w in neg else "+") + stem(w) for w in re.findall(r"[a-z]{2,}", s) if w not in _PHRASE_SKIP}
+
+
+def _same_phrase(a, b):
+    """Phrase items are the same when at least half the words of the shorter one appear, with the same polarity:
+    "Contact by SMS" is not "Contact by email", and "no email contact" is not "email contact only".
+    The shared words must also be a third of the longer one, so one word in common is not enough
+    ("Phone call requested (emailed)" is not "Email only, no calls")."""
+    x, y = _words(a), _words(b)
+    n = len(x & y)
+    return bool(x and y) and n >= max(1, min(len(x), len(y)) / 2) and n >= max(len(x), len(y)) / 3
+
+
+def _restates(a, b):
+    """`a` says item `b` again: the words of the shorter all appear in the longer, with the same polarity.
+    "English-language support" does not restate "Spanish-language support"."""
+    x, y = _words(a), _words(b)
+    return bool(x and y) and (x <= y or y <= x)
+
+
+def _clashes(a, b):
+    """Phrase `a` says the opposite of `b` about some word: "Phone call requested" against "Email only, no calls"."""
+    y = _words(b)
+    return any(("-" if w[0] == "+" else "+") + w[1:] in y for w in _words(a))
+
+
+def _matcher(slot):
+    return _same_phrase if getattr(SLOT_SCHEMA.resolve(slot), "phrases", False) else _same_item
 
 
 def _same_value(a, b):
@@ -556,19 +603,44 @@ def _same_value(a, b):
     return x == y or (bool(x) and bool(y) and (x in y or y in x))
 
 
-def _agrees(p, cur, values, multi):
-    """Does an independent reading (`values`, the field now) agree with pending proposal `p`?"""
-    values = [_PAREN.sub("", v).strip() or v for v in values]   # "IBIT (bought with the GBTC proceeds)" is IBIT
+def _agrees(p, cur, values, multi, others=()):
+    """Does an independent reading (`values`, the field now) agree with pending proposal `p`?
+    `others`: the slot's other current items; a reading of one of them ("project limit 3" for "3
+    projects") is that item, not the one being removed ("project limit 20")."""
+    # "IBIT (bought with the GBTC proceeds)" is IBIT; a bare ticker in brackets, "Tarn (TRN)", is kept
+    values = [_PAREN.sub(lambda m: m.group(0) if re.fullmatch(r"\s*\([A-Z][A-Z.]{1,5}\)", m.group(0)) else "", v).strip()
+              or v for v in values]
+
+    same_item = _matcher(getattr(p, "subject", ""))
+    if same_item is _same_phrase:   # a reading may write two items as one ("desk line first; do not email")
+        values = [x.strip() for v in values for x in v.split(";") if x.strip()]
 
     def has(x):
-        return any(_same_item(v, x) for v in values)
+        return any(same_item(v, x) for v in values)
     kind = (p.metadata or {}).get("pending")
+    if multi and same_item is _same_phrase:
+        kept = lambda c: any(_restates(v, c) for v in values)   # the old item read again, near word for word
+        if kind == "RETRACT":
+            return bool(cur) and not kept(cur)
+        # "desk line for urgent; no email" is two items. A new item is read as new: a reading item already on
+        # the record ("Spanish-language support") does not confirm a look-alike ("English-language support").
+        # At least one part must be read, and no part contradicted ("phone call allowed" against "no calls");
+        # a part the reading only implies ("no phone calls" under "Email for all contact") does not block.
+        parts = [x for x in p.value.split(";") if _words(x)] or [p.value]
+        new = [v for v in values if not any(_same_value(v, o) for o in others)]
+        said = set().union(*[_words(v) for v in values]) if values else set()
+        flip = lambda w: ("-" if w[0] == "+" else "+") + w[1:]
+        if not any(same_item(v, x) for x in parts for v in new) or any(flip(w) in said for x in parts for w in _words(x)):
+            return False
+        return not cur or any(_restates(cur, x) for x in parts) or not kept(cur)
     if not multi:   # one value: the reading must also say it changed ("verified" agrees with "PASS - screens clean")
         return bool(values) and (not cur or not any(_same_value(v, cur) for v in values))
     if kind == "RETRACT":
-        return bool(cur) and not has(cur)
+        mine = [v for v in values if not any(o != cur and same_item(v, o) and _amounts(v) == _amounts(o)
+                                             and _amounts(v) != _amounts(cur) for o in others)]
+        return bool(cur) and not any(same_item(v, cur) for v in mine)
     same = [v for v in values if _same_item(v, p.value)]
-    if not any(_numbers(p.value) <= _numbers(v) or _numbers(v) <= _numbers(p.value) for v in same):
+    if not any(_amounts(p.value) <= _amounts(v) or _amounts(v) <= _amounts(p.value) for v in same):
         return False                                  # not on the list, or at a dose or count it does not say
     if cur and not _same_item(cur, p.value):
         return not has(cur)                           # a replacement: the old item must be gone
@@ -578,28 +650,43 @@ def _agrees(p, cur, values, multi):
 def llm_escalate(text, proposals, current, owner="", source=""):
     """{n: "apply" | "unsure"} for numbered (proposal, current value) pairs; `current` maps slot -> active values."""
     slots = {p.subject for p, _ in proposals}
-    fields = "\n".join(f"- {sl}" + (" (a list)" if getattr(SLOT_SCHEMA.resolve(sl), "multi", False) else "")
-                       + f": currently {current.get(sl) or '(empty)'}" for sl in sorted(slots))
+    def head(sl):   # the slot's own description says what belongs in it ("a discount is an entitlement")
+        spec = SLOT_SCHEMA.resolve(sl)
+        return (f"- {sl}" + (f" ({spec.description})" if getattr(spec, "description", "") else "")
+                + (" (a list)" if getattr(spec, "multi", False) else ""))
+    fields = "\n".join(f"{head(sl)}: currently {current.get(sl) or '(empty)'}" for sl in sorted(slots))
     about = "; ".join(x for x in (owner and f"record owner: {owner}", source and f"source: {source}") if x)
     user = f"ABOUT: {about or '-'}\n\nFIELDS:\n{fields}\n\nMESSAGE:\n\"{text}\"\n\nJSON:"
-    obj = _call_anthropic(user, ESCALATE_SYS, _ESCALATE)
-    now = {str(f.get("field", "")).strip(): [str(v) for v in (f.get("values") or [])] for f in obj.get("fields") or []}
+    # The judge's readings vary call to call (temperature is fixed by the model), so with
+    # VAYL_ESCALATE_VOTES=n a change applies only when n independent readings all agree with it.
+    n = max(1, env_int("VAYL_ESCALATE_VOTES", 1))
+    if n == 1:
+        objs = [_call_anthropic(user, ESCALATE_SYS, _ESCALATE)]
+    else:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(n) as ex:
+            objs = list(ex.map(lambda _: _call_anthropic(user, ESCALATE_SYS, _ESCALATE), range(n)))
     touched = {cur for _, cur in proposals if cur}
-    for sl in slots:   # a reading of a list that loses most items nothing proposed to touch is sloppy
-        vals = now.get(sl)
-        if vals is None or not getattr(SLOT_SCHEMA.resolve(sl), "multi", False):
-            continue
-        kept = [c for c in current.get(sl, []) if c not in touched]
-        missing = sum(not any(_same_item(v, c) for v in vals) for c in kept)
-        if (kept and not vals) or missing > max(1, len(kept) // 2):   # one dropped item can be a missed change
-            now.pop(sl)
+    readings = []
+    for obj in objs:
+        now = {str(f.get("field", "")).strip(): [str(v) for v in (f.get("values") or [])] for f in obj.get("fields") or []}
+        for sl in slots:   # a reading of a list that loses most items nothing proposed to touch is sloppy
+            vals = now.get(sl)
+            if vals is None or not getattr(SLOT_SCHEMA.resolve(sl), "multi", False):
+                continue
+            kept = [c for c in current.get(sl, []) if c not in touched]
+            missing = sum(not any(_matcher(sl)(v, c) for v in vals) for c in kept)
+            if (kept and not vals) or missing > max(1, len(kept) // 2):   # one dropped item can be a missed change
+                now.pop(sl)
+        readings.append(now)
     out = {}
     for i, (p, cur) in enumerate(proposals, 1):
-        vals = now.get(p.subject)
         multi = getattr(SLOT_SCHEMA.resolve(p.subject), "multi", False)
-        out[i] = "apply" if vals is not None and _agrees(p, cur, vals, multi) else "unsure"
+        votes = [now.get(p.subject) for now in readings]
+        out[i] = ("apply" if all(v is not None and _agrees(p, cur, v, multi, current.get(p.subject, ()))
+                                 for v in votes) else "unsure")
         _ESC_LOG.append({"slot": p.subject, "kind": (p.metadata or {}).get("pending"), "current": cur,
-                         "proposed": p.value, "reading": vals, "decision": out[i]})
+                         "proposed": p.value, "reading": votes[0] if n == 1 else votes, "decision": out[i]})
     return out
 
 
@@ -863,6 +950,21 @@ def _naming(text, values):
     return [x for x in sents if any(re.search(rf"(?<![a-z]){re.escape(k)}(?![a-z])", x.lower()) for k in keys)]
 
 
+# A pause, not an end. Narrower than _NO_CHANGE: "no plans to restart" follows a real stop.
+_PAUSE = re.compile(r"(?<![a-z])(?:hold|held|on hold|holding|pause[ds]?|suspend(?:ed|s)?)(?![a-z])")
+
+
+def _said_of(text, value, words):
+    """Does a sentence naming the item (by its first meaningful word: "API", "warfarin") use `words`?"""
+    k = _key(value)
+    return bool(k) and any(words.search(x.lower()) for x in _SENT_SPLIT.split(str(text or ""))
+                           if re.search(rf"(?<![a-z]){re.escape(k)}(?![a-z])", x.lower()))
+
+
+def _paused_in(text, value):
+    return _said_of(text, value, _PAUSE)
+
+
 # Language that says a list item has ENDED (a ticket closed, a position sold, a drug stopped).
 _ENDED = re.compile(_STOP_WORDS.pattern + r"|(?<![a-z])(?:resolved|closed|fixed|cancel+ed|ended|expired|revoked"
                     r"|removed|sold|liquidated|closed out|transferred out|no longer)(?![a-z])")
@@ -890,6 +992,16 @@ _NUM = re.compile(r"\d+(?:[.,]\d+)*")
 
 def _numbers(v):
     return {n.replace(",", "") for n in _NUM.findall(str(v))}
+
+
+# A bare N/N is not taken for a date: it is as often a strength or a fraction ("Norco 5/325", "1/2 tablet").
+_WHEN = re.compile(r"\d{4}-\d{1,2}-\d{1,2}|(?<!\d)\d{1,2}/\d{1,2}/\d{2,4}(?!\d)|\d{1,2}:\d{2}(?:\s*[ap]m)?")
+
+
+def _amounts(v):
+    """The doses and counts a value states: not dates, clock times ("8:00 to 18:00" is "8 to 6"), or
+    anything in brackets ("(effective 2026-09-01)")."""
+    return _numbers(_WHEN.sub(" ", _PAREN.sub(" ", str(v))))
 
 
 def _mentions(val, item_value):
@@ -1088,8 +1200,8 @@ class LLMMemory:
         if _ESCALATE:
             try:
                 results += self._escalate(text, before, source, owner, was)
-            except Exception as e:   # the facts are already written; undecided proposals just stay pending
-                log.warning("escalation failed, proposals stay pending: %s", e)
+            except Exception as e:   # nothing was decided: every gated change of this message is a proposal
+                log.warning("escalation failed, changes stay pending: %s", e)
         new = [s for s in self.statements if s.id not in before]
         for s in new:
             if (s.metadata or {}).get("auto_applied") or (s.metadata or {}).get("would_auto"):
@@ -1120,7 +1232,9 @@ class LLMMemory:
                 tgt = self.get(o["target_id"])
                 if tgt is None or tgt.status is not Status.ACTIVE:
                     continue                          # the first pass (or an earlier verdict) got there
-                props = [p for p in self.pending() if p.supersedes == tgt.id]
+                # only this message's proposals: an older one left undecided (no person answers in
+                # automatic mode) must not swallow a new reading of the same row
+                props = [p for p in self.pending() if p.supersedes == tgt.id and p.raw == text]
                 if props:
                     out += self._agree([p for p in props if (p.metadata or {}).get("pending") == o["action"]
                                         and (o["action"] == "RETRACT" or canon(p.value) == canon(o["value"])
@@ -1156,18 +1270,45 @@ class LLMMemory:
             view = type("Applied", (), {"subject": st.subject, "value": gone if kind == "RETRACT" else st.value,
                                         "metadata": {"pending": kind}})()
             auto.append((st, view, gone if kind == "RETRACT" or rival is not None else ""))
+        for st in self.statements:   # an ungated phrase list: a new item contradicting one on record is checked
+            spec = SLOT_SCHEMA.resolve(st.subject)
+            if (st.id in before or st.status is not Status.ACTIVE or spec is None or not spec.phrases
+                    or spec.confirm or not any(_clashes(st.value, v) for v in current.get(st.subject, ()))):
+                continue
+            rival = self.get(st.supersedes) if st.supersedes else None
+            view = type("Applied", (), {"subject": st.subject, "value": st.value,
+                                        "metadata": {"pending": "SUPERSEDE" if rival is not None else "ADD"}})()
+            auto.append((st, view, rival.value if rival is not None else ""))
         heads, seen = [], set()
         for p in self.pending():
-            if p.id in before or p.id in seen or (p.metadata or {}).get("why") == "pasted or retrieved text":
+            tgt = self.get(p.supersedes) if p.supersedes else None
+            # an older removal left undecided is decided again when this message's own words end the item
+            # ("removed 2TB storage add-on"): the blind reading must still agree before it applies
+            ended = ((p.metadata or {}).get("pending") == "RETRACT" and tgt is not None
+                     and _said_of(self._fresh(text), tgt.value, _ENDED) and not _hedged(self._fresh(text)))
+            if ((p.id in before and (p.metadata or {}).get("again") != text and not ended) or p.id in seen
+                    or (p.metadata or {}).get("why") == "pasted or retrieved text"):
                 continue
             group = self.group(p.id)
             seen |= {g.id for g in group}
+            # "suspended pending investigation" is a pause: the item stays unless a person removes it. A change
+            # linked to the paused removal ("warfarin held, enoxaparin started as a bridge") waits with it.
+            if any((g.metadata or {}).get("pending") == "RETRACT"
+                   and _paused_in(self._fresh(text), (self.get(g.supersedes) or g).value if g.supersedes else g.value)
+                   for g in group):
+                continue
             heads.append(group)
         if not heads and not auto:
             return []
         pairs = [(p, (self.get(p.supersedes).value if p.supersedes and self.get(p.supersedes) else ""))
                  for g in heads for p in g] + [(view, cur) for _, view, cur in auto]
-        decided = llm_escalate(text, pairs, current, owner, source)
+        try:
+            decided = llm_escalate(text, pairs, current, owner, source)
+        except Exception:   # no reading, no change: what applied by itself waits as a proposal, the old value stands
+            for st, _, _ in auto:
+                if st.status is not Status.FLAGGED:
+                    self._unapply(st, "independent check unavailable")
+            raise
         n_props = sum(len(g) for g in heads)
         for k, (st, _, _) in enumerate(auto):
             if decided.get(n_props + k + 1) != "apply" and st.status is not Status.FLAGGED:
@@ -1314,13 +1455,18 @@ class LLMMemory:
         history, and then the stop is simply lost. Only ever adds a proposal for a person to decide."""
         if not SLOT_SCHEMA or str(source or "").lower() in _TRUSTED_SOURCES:
             return []
-        proposed = {p.supersedes for p in self.pending()}
+        proposed = {p.supersedes: p for p in self.pending()}
         out = []
         for s in list(self.active()):
             spec = SLOT_SCHEMA.resolve(s.subject)
-            if (spec is None or not (spec.confirm and spec.multi) or s.id in proposed
+            if (spec is None or not (spec.confirm and spec.multi)
                     or not _stop_named(text, _list_identity(s.value))
                     or _hedged(text)):   # a hedge anywhere: per sentence it asked 9 times, 0 right
+                continue
+            if s.id in proposed:   # an earlier proposal (a hold, left undecided) is decided on this stop
+                p = proposed[s.id]
+                if (p.metadata or {}).get("pending") == Action.RETRACT.value:
+                    p.metadata = {**p.metadata, "again": text}
                 continue
             pend = self._mk(f"{s.subject}@{s.scope}", s.subject, s.value, s.scope, status=Status.FLAGGED,
                             confidence=0.9, raw=text, source=source, supersedes=s.id)
@@ -1665,6 +1811,7 @@ class LLMMemory:
                             if x.supersedes == tgt.id and (x.metadata or {}).get("pending") == act.value
                             and (act == Action.RETRACT or canon(x.value) == canon(val))), None)
                 if dup is not None:
+                    dup.metadata = {**(dup.metadata or {}), "again": text}   # said again: decide it on this message
                     return Action.DEDUP, subj, val
                 pend = self._mk(f"{subj}@{scope}", subj, val, scope,
                                  status=Status.FLAGGED, confidence=conf, raw=text, source=source,

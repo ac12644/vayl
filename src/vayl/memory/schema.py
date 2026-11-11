@@ -98,6 +98,7 @@ class SlotSpec:
     holds: bool = True          # "hold/continue/keep" in a value means no change (a med list); false for
                                 # a list where those words are ordinary ("AAPL holding 300 shares")
     future: bool = False        # values describe the future (goals): a future-tense value is current
+    phrases: bool = False       # items are phrases ("Contact by SMS"), matched by their words, not the first one
 
     @property
     def keys(self):
@@ -238,6 +239,7 @@ def from_dict(obj):
             multi=bool(raw.get("multi", False)),
             aliases=[str(a) for a in (raw.get("aliases") or [])],
             holds=bool(raw.get("holds", True)), future=bool(raw.get("future", False)),
+            phrases=bool(raw.get("phrases", False)),
         ))
     names = {s.name for s in slots}
     constraints = []

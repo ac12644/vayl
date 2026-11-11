@@ -69,12 +69,64 @@ What did not work: a stricter judge prompt (holds true changes, so DNR stayed cu
 
 Scorer fixes (they change older numbers in this file): negated values ("no text alerts") no longer match, rewordings are followed through REFINE chains, a value merely left stale is not also counted as a forbidden write, and rejected proposals or missed re-adds are not counted as wrong removals. A perfect person's draw scores 243 instead of 239 on the fixed scorer.
 
+### Fresh draw (2026-11-07)
+
+A new Haiku draw the matcher was never tuned on (both sets, short and long notes, 270 runs), automatic mode, nobody answering, then the same extractions replayed with a perfect person:
+
+| Who decides | Perfect | Severe | Stale | Wrong values written | Questions |
+| --- | --- | --- | --- | --- | --- |
+| Blind check, as committed | 240 | 11 | 5 | 8 | 0 |
+| Blind check, after the three fixes below (replay) | 240 | 10 | 7 | 9 | 0 |
+| Perfect person | 250 | 5 | 5 | 2 | 375 |
+
+No drop from the tuned draws (236), so no sign of overfitting. The draw exposed three flaws, now fixed with tests: a ticker ("375 TRN" vs "Tarn Resources Corp. (TRN)") was not matched, so a share count change stayed pending; a suspension ("API and logins disabled pending investigation") was decided as a permanent removal; and an undecided proposal from an earlier message (a client's own "KYC is done") swallowed the real KYC pass two messages later, because nobody ever rejects it in automatic mode. A removal whose own sentence holds or suspends the item is now left undecided, and a proposal said again is decided on the new message. The fixed row is a replay of the draw the fixes came from, so it is not independent evidence. It also loses `h_c01` twice: the committed code had removed warfarin on a hold (wrong) and was scored right only because the drug was stopped later in a message where Haiku wrote no stop. Remaining gap to the person: the disputed `h_c02` cephalexin (6 severe) and the blind check's own run-to-run variation (the same `ep_s02` message read once as "active", once as "locked").
+
+### Second round and a clean live draw (2026-11-08)
+
+The second round fixed what the first replay still got wrong, each with a test:
+- **Ended items.** An older undecided removal is decided again when a later message ends the item, and a stop sweep picks up a stop left pending by an earlier hold (`h_c01`).
+- **Matcher.** Hyphenated names ("business-hours") and bare tickers now match, and numbers inside dates and times no longer count as amounts.
+- **The judge sees what each field holds.** Slot descriptions are in its prompt, and it is told that a change described as made counts now even when it carries a start date (it does not know today's date).
+- **Scorer.** "turned off" and "opted out of" count as negations.
+
+Things tried and dropped:
+- Sonnet 5.5 rejects `temperature`, so the judge cannot be made deterministic that way.
+- Two agreeing readings (`VAYL_ESCALATE_VOTES=2`) held back more correct changes than they stopped. It remains an option; the default is 1.
+
+The second round was then tested on a new live Haiku draw that no fix had seen. The long-note tuned set was stopped at 83 of 90 runs.
+
+| Who decides (same extractions) | Perfect | Severe | Stale | Questions |
+| --- | --- | --- | --- | --- |
+| Blind check | 239/263 | 7 | 3 | 0 |
+| Perfect person | 235/262 | 8 | 10 | 367 |
+
+On this draw the automatic mode matched the perfect person, and it asked no questions. It had no automatic-only errors except the disputed `h_c02`, which accounts for 6 of the 7 severe:
+- **`h_c02` (disputed).** The key forbids an active 5-day cephalexin course from the active medication list. A clinician needs to settle it.
+- **`h_s01` (both modes).** A one-off "she emailed asking me to ring" became a standing phone preference beside "Email only, no calls". The perfect person makes the same error, because preferences apply ungated.
+
+### Preference fix and code review (2026-11-11, not live-validated)
+
+The Anthropic credit ran out before the changes in this section could be replayed with a working judge. They are covered by unit tests and the offline guards only.
+
+**Preferences (`h_s01`).** Preferences still apply at once. Two things changed:
+- Preference items are compared by their words, with negation ("Contact by SMS" is not "Contact by email"; "no calls", "stop emailing" and "instead of text alerts" are negations). A slot opts in with `"phrases": true`.
+- A new preference that contradicts one on record ("Phone call requested" against "Email only, no calls") goes to the blind check before it stands.
+
+Sending every preference change to the blind check was measured first and dropped. It reached 236/263 on the replay, but a low-confidence new preference became a note nobody decides (`ep_s09`, 3 runs), and "please switch my support language to English from now on" was read as not yet in effect (`ep_s06`).
+
+Known limit: the contradiction rule works word by word. With "No marketing emails" on record, "Email invoices monthly" counts as a contradiction and is held.
+
+**Review fixes.**
+- A bare `N/N` was taken for a date, so "Norco 5/325" and "Norco 10/325" compared equal and a wrong strength passed the check. Only full dates and clock times are stripped now.
+- The pause rule covered a lone removal only. "Warfarin held, enoxaparin started as a bridge" was judged as a linked pair and could remove warfarin. A group with a paused removal now waits whole.
+- When the judge cannot be reached, a change that had applied by itself goes back to a proposal and the old value stands. Before, it stood unchecked.
+
 ## Guards, after all changes
 
 - Scripted extractor: 135/135 perfect, in all three configs on both sets.
 - `med_change_replay`: 0 unsafe, 0 wrong, 1,557 auto-applied.
 - `approval_safety`, linked groups: 0/709 unsafe in both reviewer behaviours.
-- `tests/`: all pass.
+- `tests/`: all pass (752).
 
 ## Caveats
 

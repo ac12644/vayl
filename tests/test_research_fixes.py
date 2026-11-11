@@ -536,7 +536,238 @@ def test_a_shared_word_is_not_the_same_list_item():
     ("400 shares BRK.B", "RETRACT", "400 shares BRK.B", ["1,500 shares NVDA"], True, True),
     ("$50,000 face 6-month T-bill", "RETRACT", "$50,000 face 6-month T-bill", ["$50,000 SWVXX money market"], True, True),
     ("800 shares GBTC", "RETRACT", "800 shares GBTC", ["IBIT (bought with proceeds of the 800 GBTC sale)"], True, True),
+    ("375 TRN", "SUPERSEDE", "Tarn Resources Corp. (TRN) 400 shares",
+     ["BNDX 200 shares", "Tarn Resources Corp. (TRN) 375 shares"], True, True),   # fresh draw: ticker names the item
+    ("rivaroxaban 20 mg BID", "SUPERSEDE", "apixaban 5 mg BID", ["apixaban 5 mg BID"], True, False),
 ])
 def test_an_independent_reading_is_matched_by_meaning_not_wording(value, kind, cur, reading, multi, agrees):
     p = type("P", (), {"value": value, "metadata": {"pending": kind}})()
     assert llm_memory._agrees(p, cur, reading, multi) is agrees
+
+
+# ── found on a fresh draw the matcher was never tuned on ──
+
+def test_a_suspension_is_not_decided_as_a_removal(monkeypatch):
+    """h_s02: "suspended pending investigation, API and logins disabled" read as API access gone for good."""
+    monkeypatch.setattr(llm_memory, "SLOT_SCHEMA", _preset("support"))
+    monkeypatch.setattr(llm_memory, "_TRUSTED_SOURCES", ("seed",))
+    monkeypatch.setattr(llm_memory, "_ESCALATE", "stub")
+    monkeypatch.setattr(llm_memory, "llm_escalate", lambda *a, **k: pytest.fail("a pause was escalated as a removal"))
+    m = LLMMemory()
+    m._apply({"action": "ADD", "subject": "entitlement", "value": "API access", "confidence": 0.95,
+              "kind": "state", "time_ref": "present"}, "API access", source="seed")
+    api = m.active()[0]
+    _say(m, monkeypatch, "The whole account was suspended pending investigation, API and logins disabled.",
+         {"action": "RETRACT", "subject": "entitlement", "value": "API access", "target_id": api.id})
+    assert [s.value for s in m.active() if s.subject == "entitlement"] == ["API access"]
+
+
+def test_an_old_undecided_proposal_does_not_swallow_a_new_reading(monkeypatch):
+    """ep_f01: the client's own "KYC is done" stayed pending, so the real PASS two messages later was dropped."""
+    monkeypatch.setattr(llm_memory, "SLOT_SCHEMA", _preset("finance"))
+    monkeypatch.setattr(llm_memory, "_TRUSTED_SOURCES", ("seed",))
+    m = LLMMemory()
+    m._apply({"action": "ADD", "subject": "kyc_status", "value": "pending", "confidence": 0.95, "kind": "state",
+              "time_ref": "present"}, "pending", source="seed")
+    kyc = m.active()[0]
+    _say(m, monkeypatch, "Mark it complete, KYC is done as far as I'm concerned.",
+         {"action": "SUPERSEDE", "subject": "kyc_status", "value": "complete", "target_id": kyc.id, "confidence": 0.5})
+    assert m.pending()
+    monkeypatch.setattr(llm_memory, "llm_verdict", lambda *a, **k: [{"action": "SUPERSEDE", "subject": "kyc_status",
+        "value": "PASS", "target_id": kyc.id, "confidence": 0.9, "kind": "state", "time_ref": "present",
+        "reason": "verdict", "quote": "Case 88421 closed, outcome PASS"}])
+    monkeypatch.setattr(llm_memory, "_VERDICT", True)
+    _say(m, monkeypatch, "Case 88421 closed, outcome PASS.", {"action": "DEDUP", "subject": "kyc_status", "value": "pending"})
+    assert any(p.value == "PASS" for p in m.pending())
+
+
+def test_no_plans_to_restart_is_not_a_pause():
+    assert not llm_memory._paused_in("I stopped furosemide this morning for good, no plans to restart.", "furosemide 40 mg daily")
+    assert llm_memory._paused_in("Warfarin HELD x3 days for colonoscopy, resume after.", "warfarin 5 mg daily")
+
+
+def test_a_held_drug_stopped_later_is_decided_then(clinical, monkeypatch):
+    """h_c01: the hold left a stop proposal undecided; the real stop later was folded into it and never decided."""
+    monkeypatch.setattr(llm_memory, "_ESCALATE", "stub")
+    monkeypatch.setattr(llm_memory, "llm_escalate", lambda text, pairs, *a, **k: {i + 1: "apply" for i in range(len(pairs))})
+    lis = next(s for s in clinical.active() if s.value.startswith("lisinopril"))
+    _say(clinical, monkeypatch, "Lisinopril held for the procedure, resume after.", {**_STOP_LISINOPRIL, "target_id": lis.id})
+    assert "lisinopril 10 mg daily" in _meds(clinical) and clinical.pending()
+    _say(clinical, monkeypatch, "Lisinopril discontinued today, cough.", {**_STOP_LISINOPRIL, "target_id": lis.id})
+    assert _meds(clinical) == ["metformin 1000 mg BID"]
+
+
+# ── second fresh-draw pass: every remaining automatic-only failure ──
+
+@pytest.mark.parametrize("value,kind,cur,reading,others,agrees", [
+    # h_s05: clock times and a bracketed date are not amounts; "business-hours" is business
+    ("Business-hours phone support, Mon to Fri 8:00 to 18:00 (effective 2026-09-01)", "ADD", "",
+     ["Business hours phone support, Mon to Fri 8 to 6"], (), True),
+    # ep_s08: "project limit 3" is the 3-project entry already on the record, not the 20 being removed
+    ("project limit 20 (Growth)", "RETRACT", "project limit 20 (Growth)", ["3 projects", "project limit 3 (Starter)"],
+     ("3 projects", "project limit 20 (Growth)"), True),
+    # but a dose the reading still lists is not gone
+    ("lisinopril 10 mg daily", "RETRACT", "lisinopril 10 mg daily", ["lisinopril 20 mg daily", "metformin 1000 mg BID"],
+     ("lisinopril 10 mg daily", "metformin 1000 mg BID"), False),
+])
+def test_matcher_cases_from_the_second_fresh_pass(value, kind, cur, reading, others, agrees):
+    p = type("P", (), {"value": value, "metadata": {"pending": kind}})()
+    assert llm_memory._agrees(p, cur, reading, True, others) is agrees
+
+
+def test_the_judge_is_told_what_each_field_holds(monkeypatch):
+    """ep_s03: shown only the name "entitlement", the judge left a retention discount out."""
+    monkeypatch.setattr(llm_memory, "SLOT_SCHEMA", _preset("support"))
+    seen = {}
+    monkeypatch.setattr(llm_memory, "_call_anthropic", lambda user, *a, **k: seen.setdefault("u", user) and {"fields": []})
+    p = type("P", (), {"subject": "entitlement", "value": "20% discount", "metadata": {"pending": "ADD"}})()
+    llm_memory.llm_escalate("20% discount applied.", [(p, "")], {"entitlement": []})
+    assert "discount the customer has" in seen["u"]
+
+
+def test_an_older_undecided_removal_is_decided_when_a_later_message_ends_the_item(monkeypatch):
+    """ep_s05: the customer's own "I cancelled it" waited (right); "removed 2TB storage add-on" later decides it."""
+    monkeypatch.setattr(llm_memory, "SLOT_SCHEMA", _preset("support"))
+    monkeypatch.setattr(llm_memory, "_TRUSTED_SOURCES", ("seed",))
+    m = LLMMemory()
+    m._apply({"action": "ADD", "subject": "entitlement", "value": "2TB extra storage", "confidence": 0.95,
+              "kind": "state", "time_ref": "present"}, "2TB extra storage", source="seed")
+    tb = m.active()[0]
+    monkeypatch.setattr(llm_memory, "_ESCALATE", "stub")
+    monkeypatch.setattr(llm_memory, "llm_escalate", lambda text, pairs, *a, **k: {i + 1: "unsure" for i in range(len(pairs))})
+    _say(m, monkeypatch, "I cancelled that extra storage thing in August, I think.",
+         {"action": "RETRACT", "subject": "entitlement", "value": "2TB extra storage", "target_id": tb.id})
+    assert m.pending()
+    monkeypatch.setattr(llm_memory, "llm_escalate", lambda text, pairs, *a, **k: {i + 1: "apply" for i in range(len(pairs))})
+    _say(m, monkeypatch, "Removed 2TB storage add-on from her subscription now.", {"action": "ADD", "subject": "x", "value": "y"})
+    assert not [s for s in m.active() if s.subject == "entitlement"]
+
+
+def test_a_stop_sweep_decides_an_earlier_held_stop(clinical, monkeypatch):
+    """h_c01: the hold left warfarin's stop undecided, so the sweep skipped "warfarin dc'd" and the switch stalled."""
+    monkeypatch.setattr(llm_memory, "_ESCALATE", "stub")
+    monkeypatch.setattr(llm_memory, "llm_escalate", lambda text, pairs, *a, **k: {i + 1: "apply" for i in range(len(pairs))})
+    lis = next(s for s in clinical.active() if s.value.startswith("lisinopril"))
+    _say(clinical, monkeypatch, "Lisinopril held for the procedure, resume after.", {**_STOP_LISINOPRIL, "target_id": lis.id})
+    assert clinical.pending()
+    _say(clinical, monkeypatch, "Lisinopril dc'd today, removed from MAR.", {"action": "ADD", "subject": "symptom", "value": "cough"})
+    assert _meds(clinical) == ["metformin 1000 mg BID"]
+
+
+def test_with_two_votes_a_change_applies_only_when_both_readings_agree(clinical, monkeypatch):
+    monkeypatch.setattr(llm_memory, "_ESCALATE", "stub")
+    monkeypatch.setenv("VAYL_ESCALATE_VOTES", "2")
+    replies = iter([{"fields": [{"field": "active_medication", "values": ["metformin 1000 mg BID"]}]},
+                    {"fields": [{"field": "active_medication", "values": ["metformin 1000 mg BID", "lisinopril 10 mg daily"]}]}])
+    monkeypatch.setattr(llm_memory, "_call_anthropic", lambda *a, **k: next(replies))
+    lis = next(s for s in clinical.active() if s.value.startswith("lisinopril"))
+    _say(clinical, monkeypatch, "Lisinopril discontinued if the cough persists.", {**_STOP_LISINOPRIL, "target_id": lis.id})
+    assert "lisinopril 10 mg daily" in _meds(clinical)
+
+
+def _support_prefs(monkeypatch, reading):
+    monkeypatch.setattr(llm_memory, "SLOT_SCHEMA", _preset("support"))
+    monkeypatch.setattr(llm_memory, "_TRUSTED_SOURCES", ("seed",))
+    monkeypatch.setattr(llm_memory, "_ESCALATE", "stub")
+    monkeypatch.setattr(llm_memory, "_call_anthropic",
+                        lambda *a, **k: {"fields": [{"field": "preference", "values": reading}]})
+    m = LLMMemory()
+    m._apply({"action": "ADD", "subject": "preference", "value": "Email only, no calls", "confidence": 0.95,
+              "kind": "state", "time_ref": "present"}, "Email only, no calls", source="seed")
+    return m
+
+
+def test_a_one_off_call_request_does_not_become_a_contact_preference(monkeypatch):
+    """h_s01: "note email-only pref, but she emailed asking me to ring" added a standing phone preference."""
+    m = _support_prefs(monkeypatch, ["Email only, no calls"])
+    _say(m, monkeypatch, "Called the billing contact as requested, note email-only pref, but she emailed asking me to ring.",
+         {"action": "ADD", "subject": "preference", "value": "Phone call requested"})
+    assert [s.value for s in m.active() if s.subject == "preference"] == ["Email only, no calls"]
+
+
+def test_a_stated_preference_change_still_applies(monkeypatch):
+    m = _support_prefs(monkeypatch, ["Email only, no calls", "Invoices in German"])
+    _say(m, monkeypatch, "She asked that invoices go out in German from now on.",
+         {"action": "ADD", "subject": "preference", "value": "Invoices in German"})
+    assert sorted(s.value for s in m.active() if s.subject == "preference") == ["Email only, no calls", "Invoices in German"]
+
+
+@pytest.mark.parametrize("a, b, same", [
+    ("Contact by SMS", "Contact by email", False),
+    ("no email contact", "email contact only", False),
+    ("no email contact", "No email contact", True),
+    ("Email only, no calls", "One-time phone call allowed 2026-11-09 for SSO issue", False),
+    ("Email only, no calls", "Contact by email", True),
+    ("call desk line first for anything urgent", "phone desk line for urgent matters", True),
+    ("No text message (SMS) contact", "Contact by SMS", False),
+    ("stop emailing", "do not email", True),
+    ("Phone call requested (emailed 2026-11-08)", "Email only, no calls", False),
+])
+def test_phrase_items(a, b, same):
+    assert llm_memory._same_phrase(a, b) is same
+
+
+def test_preference_cases_from_the_fresh_draw(monkeypatch):
+    """The three readings a first-word matcher got wrong once preferences were checked (ep_s01, h_s03, h_s01)."""
+    monkeypatch.setattr(llm_memory, "SLOT_SCHEMA", _preset("support"))
+    P = lambda v, kind: type("P", (), {"subject": "preference", "value": v, "metadata": {"pending": kind}})()
+    agrees = llm_memory._agrees
+    assert agrees(P("phone desk line for urgent matters; no email contact", "SUPERSEDE"), "email contact only",
+                  ["call desk line first for anything urgent", "no email contact"], True)
+    assert agrees(P("Contact by SMS", "RETRACT"), "Contact by SMS", ["Contact by email"], True)
+    assert agrees(P("phone desk line for urgent contact; stop emailing", "SUPERSEDE"), "email contact only",
+                  ["call desk line first for anything urgent; do not email"], True)
+    assert not agrees(P("One-time phone call allowed 2026-11-09 for SSO issue; otherwise email only", "ADD"), "",
+                      ["Email only, no calls"], True, ["Email only, no calls"])
+    assert not agrees(P("English-language support", "ADD"), "", ["Spanish-language support"], True,
+                      ["Spanish-language support"])                                   # ep_s06
+    assert agrees(P("Email only; no phone calls", "ADD"), "", ["Email for all contact"], True,
+                  ["Phone callback after 5pm"])                                       # h_s05
+    assert agrees(P("Spanish-language support", "RETRACT"), "Spanish-language support", ["English-language support"], True)
+    assert agrees(P("text alerts", "RETRACT"), "text alerts", ["email instead of text alerts"], True)   # ep_s05
+    assert not agrees(P("Contact by SMS", "RETRACT"), "Contact by SMS", ["Contact by email", "contact by SMS"], True)
+
+
+def test_a_combination_strength_is_not_a_date():
+    """"Norco 5/325" and "Norco 10/325" both lost their strength to the date pattern and agreed."""
+    assert llm_memory._amounts("Norco 5/325 mg") != llm_memory._amounts("Norco 10/325 mg")
+    assert llm_memory._amounts("metoprolol 1/2 tablet daily") and llm_memory._amounts("insulin 70/30 20 units") == {"70", "30", "20"}
+    assert llm_memory._amounts("phone support 8:00 to 18:00 from 10/14/2026 (effective 2026-09-01)") == set()
+    p = type("P", (), {"subject": "active_medication", "value": "Norco 10/325 mg q6h", "metadata": {"pending": "SUPERSEDE"}})()
+    assert not llm_memory._agrees(p, "Norco 5/325 mg q6h", ["Norco 5/325 mg q6h"], True, ["Norco 5/325 mg q6h"])
+
+
+def _warfarin(monkeypatch):
+    monkeypatch.setattr(llm_memory, "SLOT_SCHEMA", _preset("clinical"))
+    monkeypatch.setattr(llm_memory, "_TRUSTED_SOURCES", ("seed",))
+    monkeypatch.setattr(llm_memory, "_ESCALATE", "stub")
+    m = LLMMemory()
+    for v in ["warfarin 5 mg daily", "metformin 1000 mg BID"]:
+        m._apply({"action": "ADD", "subject": "active_medication", "value": v, "confidence": 0.95, "kind": "state",
+                  "time_ref": "present"}, v, source="seed")
+    return m, {"action": "RETRACT", "subject": "active_medication", "value": "warfarin 5 mg daily", "target_id": 1}
+
+
+def test_a_hold_with_a_bridge_does_not_remove_the_held_drug(monkeypatch):
+    """The pause check looked at a lone removal only; linked to the bridge's start, the hold was judged and applied."""
+    m, stop = _warfarin(monkeypatch)
+    monkeypatch.setattr(llm_memory, "_call_anthropic", lambda *a, **k: {"fields": [
+        {"field": "active_medication", "values": ["metformin 1000 mg BID", "enoxaparin 40 mg daily"]}]})
+    _say(m, monkeypatch, "Warfarin held for the procedure, enoxaparin 40 mg daily started as a bridge.", stop,
+         {"action": "ADD", "subject": "active_medication", "value": "enoxaparin 40 mg daily"})
+    assert _meds(m) == ["metformin 1000 mg BID", "warfarin 5 mg daily"]
+    assert len(m.pending()) == 2
+
+
+def test_nothing_applies_unchecked_when_the_judge_cannot_be_reached(monkeypatch):
+    def down(*a, **k):
+        raise RuntimeError("HTTP Error 400: credit balance is too low")
+    m, stop = _warfarin(monkeypatch)
+    monkeypatch.setattr(llm_memory, "_call_anthropic", down)
+    _say(m, monkeypatch, "Warfarin was stopped by cardiology today.", stop)
+    assert _meds(m) == ["metformin 1000 mg BID", "warfarin 5 mg daily"] and len(m.pending()) == 1
+    m = _support_prefs(monkeypatch, [])
+    monkeypatch.setattr(llm_memory, "_call_anthropic", down)
+    _say(m, monkeypatch, "Note email-only pref, but she emailed asking me to ring.",
+         {"action": "ADD", "subject": "preference", "value": "Phone call requested"})
+    assert [s.value for s in m.active() if s.subject == "preference"] == ["Email only, no calls"]

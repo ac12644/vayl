@@ -29,7 +29,7 @@ def _word(needle, hay):
     return re.search(rf"(?<![a-z0-9]){re.escape(needle.strip().lower())}(?![a-z0-9])", hay.lower()) is not None
 
 
-_NEG = re.compile(r"(?:^|[^a-z])(?:no|not|never|without|turned off)\s+$")
+_NEG = re.compile(r"(?:^|[^a-z])(?:no|not|never|without|turned off|opted out of)\s+$")
 _NEG_AFTER = re.compile(r"^\s+(?:turned off|disabled|off)(?![a-z])")
 
 
