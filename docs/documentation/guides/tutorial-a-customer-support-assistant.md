@@ -98,7 +98,7 @@ print(bot.list_memories(user_id="cust_9120"))
 
 ```
 Stored: [ADD] plan = Enterprise
-Stored: [FLAG] plan = Pro
+Not applied, flagged for review: [FLAG] plan = Pro
 • plan = Enterprise  (#1)
 ⚠ plan = Pro  (#2, flagged — needs confirmation)
 ```

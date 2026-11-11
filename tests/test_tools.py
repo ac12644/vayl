@@ -236,7 +236,7 @@ def test_the_server_tells_clients_when_to_use_memory():
         assert word in text
 
 
-def test_the_review_tools_warn_before_two_anticoagulants_become_current(uid, monkeypatch):
+def test_the_review_tools_refuse_two_anticoagulants_unless_overridden(uid, monkeypatch):
     from vayl.memory.schema import load as load_schema
     monkeypatch.setattr(llm_memory, "SLOT_SCHEMA", load_schema("preset:clinical"))
     shapes = {"On warfarin 5 mg daily.": [{"action": "ADD", "subject": "active_medication",
@@ -247,7 +247,10 @@ def test_the_review_tools_warn_before_two_anticoagulants_become_current(uid, mon
     s.remember("On warfarin 5 mg daily.", user_id=uid)
     s.remember("Now on Eliquis 5 mg BID.", user_id=uid)
     queue = s.pending_changes(user_id=uid)
-    assert "ADD active_medication: 'Eliquis 5 mg BID'" in queue and "two anticoagulants" in queue
+    assert "ADD active_medication: 'Eliquis 5 mg BID'" in queue and "would break one_anticoagulant" in queue
     pid = int(queue.split("#")[1].split()[0])
-    approved = s.confirm_change(memory_id=pid, user_id=uid)
-    assert approved.startswith(f"Approved #{pid}: ADD") and "'warfarin 5 mg daily' is still active" in approved
+    refused = s.confirm_change(memory_id=pid, user_id=uid)
+    assert refused.startswith("Not approved") and "apixaban, warfarin" in refused
+    assert f"#{pid}" in s.pending_changes(user_id=uid)                     # still waiting
+    approved = s.confirm_change(memory_id=pid, user_id=uid, override=True)  # e.g. bridging, decided by a person
+    assert approved.startswith(f"Approved #{pid}: ADD")

@@ -73,7 +73,7 @@ When no key and no base URL are set, the key sent to the local endpoint is the p
 | Variable | Default | Description |
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | unset | Anthropic key. Selects `anthropic` when `LLM_PROVIDER` is unset. **Sensitive.** |
-| `ANTHROPIC_MODEL` | `claude-haiku-4-5-20251001` | Anthropic model for extraction and answers. |
+| `ANTHROPIC_MODEL` | `claude-haiku-5-5` | Anthropic model for extraction and answers. |
 | `GROQ_API_KEY` | unset | Groq key. Selects `groq` when `LLM_PROVIDER` is unset and no Anthropic key is set. **Sensitive.** |
 | `GROQ_MODEL` | `llama-3.3-70b-versatile` | Groq model for extraction and answers. |
 | `GROQ_TEMP` | `0.0` | Temperature for Groq extraction. |
@@ -130,6 +130,11 @@ With no model variables set, Vayl uses a local Ollama and nothing leaves the mac
 | `VAYL_CRITICAL_CATEGORIES` | unset | Comma-separated fact categories that bypass ranking and always reach recall and `safe_recall` (case-insensitive). The bundled `clinical` and `finance` presets tag their critical slots `critical`. |
 | `VAYL_CRITICAL_BUDGET` | `200` | Maximum number of critical facts per read. Above it the read fails (`CriticalOverflow`) instead of silently dropping some. |
 | `VAYL_TRUSTED_SOURCES` | unset | Comma-separated `source` values whose changes skip the confirmation gate, for authorized feeds such as `fhir,hl7` (case-insensitive). Since 0.6.0, only a key whose principal name equals the source, or a caller with the `approve` capability, may write with that source. |
+| `VAYL_PROPOSE_ONLY_SOURCES` | `pasted,retrieved,web,email,document,tool` | Comma-separated `source` values for text that was pasted or fetched rather than written by someone accountable for the record. Any change such text makes to a declared slot is only proposed, whatever the slot's confirm mode, because it may carry planted instructions. |
+| `VAYL_VERDICT` | `on` | When a slot schema is declared, a second model call per message checks each current fact in a declared slot against the message: does it end, change, or stay? It catches stops and switches the first pass missed. Its answers must quote the message and still pass every gate. `off` saves the call. |
+| `VAYL_ESCALATE_MODEL` | `claude-sonnet-5-5` when `ANTHROPIC_API_KEY` is set, else off | Decides changes without a person. For each message that changes a slot with approval gates, this model reads the message and states those fields as they are now, without seeing what was proposed. A change applies only when that reading agrees with it. A change it does not agree with waits in `pending_changes` and the current value stands. Pasted or retrieved text is never decided this way. If the model cannot be reached, nothing is decided: every gated change from that message waits in `pending_changes`, including one that would otherwise have applied at once. `off` sends every gated change to a person instead. |
+| `VAYL_ESCALATE_VOTES` | `1` | How many independent readings the `VAYL_ESCALATE_MODEL` check takes. With more than one, a change applies only when every reading agrees, which costs one extra call per reading. In testing, 2 readings held back more correct changes than they stopped wrong ones, so the default is 1. |
+| `VAYL_PROMPT` | unset | `slim` uses a shorter extraction prompt. Experimental: in testing it made fewer severe mistakes but asked the reviewer more needless questions. |
 | `VAYL_CONFIRM_MODE` | unset | `review` or `auto`, for every confirm-gated slot, overriding each slot's own `confirm`. `review` queues every change for approval; `auto` applies clear changes and queues uncertain ones. Unset uses the schema (the clinical preset: medications `auto`, code status `review`). Any other value fails at startup. |
 
 The prefilter only skips when re-extraction is provably a no-op. If any fact from that utterance is no longer active, it falls through to the extractor, so a restatement that should supersede is never missed. See [Safety gates and human approval](../guides/safety-gates-and-human-approval.md) for slot schemas, critical categories and trusted sources in context.

@@ -26,7 +26,7 @@ A normal `recall` reads only the active set, so a retired value cannot come back
 
 ## Why prompting the model is not enough
 
-Reconciling by prompt depends on the model noticing the contradiction every time, across a long context. Vayl enforces it in the store: for a single-valued fact there is at most one active value per `(subject, scope)`, so two contradictory values cannot both be current. The model still has to extract the fact and name its slot consistently; [declared slots](../core-concepts/core-concepts.md) make that part deterministic for the fields you care about.
+Reconciling by prompt depends on the model noticing the contradiction every time, across a long context. Vayl enforces it in the store: for a single-valued fact there is at most one active value per `(subject, scope)`, so two contradictory values cannot both be current. The model still has to extract the fact and name its slot consistently; [declared slots](../core-concepts/core-concepts.md) fix the slot names for the fields you care about, though the model still decides which slot a fact belongs to.
 
 ## What the benchmarks show
 
@@ -38,7 +38,7 @@ Two small, author-run benchmarks, both with `gpt-4o-mini`. The metric is **silen
 | [Retraction battery](https://github.com/ac12644/vayl/blob/main/benchmarks/results/retraction_battery.md) (12 retractions + 2 controls) | 0/14 silently wrong, 12/12 retractions correct | 1/14 silently wrong, 11/12 | 3/14 silently wrong, 10/12 |
 
 {% hint style="warning" %}
-These are single runs on small suites written by the Vayl author. Treat them as a reproducible demonstration, not a general accuracy claim. The scripts and per-case outputs are in `benchmarks/` in the repo.
+These are single runs on small suites written by the Vayl author. Treat them as a reproducible demonstration, not a general accuracy claim. They use short, one-fact inputs and an earlier version of Vayl; long notes with several changes are harder, and the extraction model misses or misreads some of them. The scripts and per-case outputs are in `benchmarks/` in the repo.
 {% endhint %}
 
 ## The three shapes of agent memory

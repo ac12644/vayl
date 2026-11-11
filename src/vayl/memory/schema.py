@@ -31,11 +31,20 @@ Declaring a slot also carries two properties the rest of the system reads:
                 a value is PROPOSED, not applied, and the current value stands until a human
                 approves. "auto": a clear change applies at once and is marked as auto-applied;
                 only an uncertain one (hedged, negated, future-tense, low confidence, or one that
-                would leave two anticoagulants active) is proposed. VAYL_CONFIRM_MODE overrides
+                would leave two anticoagulants active) is proposed. "earned": "auto" only while the
+                current extractor has earned it on this slot (enough decided changes, few later
+                corrected); until then, and for any new extractor, clear changes are queued and
+                tagged as ones it would have applied. "removal": a new list item applies at once,
+                and only removing or changing an existing one waits for a person, for a slot like
+                allergies where a late addition is the hazard. VAYL_CONFIRM_MODE overrides
                 the mode for every gated slot. Reconciliation is driven by an LLM reading
                 conversational text, and "stop the warfarin" appearing in a sentence is not the
                 same as an order to stop it. For most slots being wrong is recoverable; for some
                 the write itself is the hazard, and those need a person in the loop.
+    constraints (top level, beside "slots") — rules over several facts at once, e.g. at most one
+                current anticoagulant. Every change one message makes is judged together against
+                them; if the message would break one, its changes in that rule's scope are held as
+                ONE linked proposal, approved or rejected whole, and re-checked at approval.
     multi     — the slot holds a LIST, not a single value: a patient has many allergies and many
                 active medications at once. A new distinct value COEXISTS with the others instead
                 of superseding them. Without this, recording a second allergy silently deletes the
@@ -86,6 +95,10 @@ class SlotSpec:
     confirm_mode: str = ""      # "review" (a person approves every change) or "auto" (clear changes apply)
     multi: bool = False         # holds MANY concurrent values (an allergy list, a med list)
     aliases: list = field(default_factory=list)
+    holds: bool = True          # "hold/continue/keep" in a value means no change (a med list); false for
+                                # a list where those words are ordinary ("AAPL holding 300 shares")
+    future: bool = False        # values describe the future (goals): a future-tense value is current
+    phrases: bool = False       # items are phrases ("Contact by SMS"), matched by their words, not the first one
 
     @property
     def keys(self):
@@ -93,11 +106,25 @@ class SlotSpec:
         return {_norm(self.name)} | {_norm(a) for a in self.aliases}
 
 
+@dataclass
+class Constraint:
+    """A rule over SEVERAL facts at once: at most `at_most` distinct items of `slot` may be current,
+    counting only the items in `members` (a class, matched by item identity) or every item when no
+    class is given. "No two anticoagulants" is {"slot": "active_medication", "at_most": 1,
+    "class": ["warfarin", "apixaban", ...]}. Checked on the memory as it would be after a change, so
+    a switch whose stop half went missing is caught however the extractor labelled it."""
+    name: str
+    slot: str
+    at_most: int = 1
+    members: frozenset = frozenset()
+
+
 class SlotSchema:
     """A declared vocabulary. Empty by default — a general-purpose deployment declares nothing
     and behaves exactly as it did before this existed."""
 
-    def __init__(self, slots=()):
+    def __init__(self, slots=(), constraints=()):
+        self.constraints = list(constraints)
         self.slots = list(slots)
         self._by_key = {}
         for spec in self.slots:
@@ -119,6 +146,21 @@ class SlotSchema:
         and says nothing about the rest.
         """
         return self._by_key.get(_norm(subject))
+
+    def resolve_qualified(self, subject):
+        """A gated slot reached through a qualifying name: "whitfield_kyc_status" is `kyc_status`.
+
+        Left free-form, such a fact sits beside the slot and skips its gate. The prefix may name the
+        owner or someone else entirely ("john_parke_plan", "payment_plan"), so a caller must hold the
+        write for a person, never apply it. Bare aliases like "status" are too loose to count.
+        """
+        norm = _norm(subject)
+        for s in self.slots:
+            if s.confirm or s.confirm_mode == "removal":
+                for key in (s.name, *(a for a in s.aliases if "_" in a)):
+                    if norm.endswith("_" + _norm(key)):
+                        return s
+        return None
 
     def canonical(self, subject):
         """The canonical slot name for `subject`, or `subject` unchanged if undeclared."""
@@ -157,7 +199,12 @@ class SlotSchema:
             "thing lands in the same slot and reconciles against it:\n"
             + "\n".join(lines)
             + "\nIf a fact does not fit any declared slot, name it freely as usual. Do NOT force "
-              "an unrelated fact into a declared slot because it is the closest match.")
+              "an unrelated fact into a declared slot because it is the closest match. Never put "
+              "a person's or account's name in front of a declared subject: write kyc_status, not "
+              "whitfield_kyc_status. A fact that changes a declared slot goes in that slot even "
+              "when the text tells it as a story, an attribution or a confirmation number. The "
+              "slots describe the one person or account this record belongs to, so leave out facts "
+              "about anyone else, such as a relative, a roommate or a customer with a similar name.")
 
 
 # ── loading ──────────────────────────────────────────────────────────────────
@@ -169,9 +216,11 @@ def _confirm(value, slot):
         return ""
     if value is True or value in ("review", "true"):
         return "review"
-    if value == "auto":
-        return "auto"
-    raise ValueError(f"slot {slot!r}: confirm must be true, false, \"review\" or \"auto\", not {value!r}")
+    if value in ("auto", "earned", "removal"):
+        return value
+    raise ValueError(f"slot {slot!r}: confirm must be true, false, \"review\", \"auto\", \"earned\" or "
+                     f"\"removal\", "
+                     f"not {value!r}")
 
 
 def from_dict(obj):
@@ -185,12 +234,25 @@ def from_dict(obj):
             description=str(raw.get("description") or ""),
             category=str(raw.get("category") or ""),
             verbatim=bool(raw.get("verbatim", False)),
-            confirm=_confirm(raw.get("confirm", False), name) != "",
+            confirm=_confirm(raw.get("confirm", False), name) not in ("", "removal"),
             confirm_mode=_confirm(raw.get("confirm", False), name),
             multi=bool(raw.get("multi", False)),
             aliases=[str(a) for a in (raw.get("aliases") or [])],
+            holds=bool(raw.get("holds", True)), future=bool(raw.get("future", False)),
+            phrases=bool(raw.get("phrases", False)),
         ))
-    return SlotSchema(slots)
+    names = {s.name for s in slots}
+    constraints = []
+    for i, raw in enumerate((obj or {}).get("constraints", [])):
+        slot, at_most = str(raw.get("slot") or ""), raw.get("at_most", 1)
+        if slot not in names:
+            raise ValueError(f"constraint {i}: slot {slot!r} is not a declared slot")
+        if not isinstance(at_most, int) or isinstance(at_most, bool) or at_most < 1:
+            raise ValueError(f"constraint {i}: at_most must be a whole number of at least 1, not {at_most!r}")
+        constraints.append(Constraint(name=str(raw.get("name") or f"{slot}_at_most_{at_most}"), slot=slot,
+                                      at_most=at_most,
+                                      members=frozenset(str(m).strip().lower() for m in raw.get("class") or ())))
+    return SlotSchema(slots, constraints)
 
 
 _PRESET_PREFIX = "preset:"

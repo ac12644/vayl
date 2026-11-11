@@ -191,6 +191,39 @@ HONESTY RULE: if not confident it is a real CHANGE to a state, choose FLAG, neve
 Sarcasm/hypotheticals are SKIP. This rule is about changes to state — it never applies to events,
 which stand alongside each other and need no adjudication."""
 
+# R15 A/B: the same rules in about half the words, with "reason" written before "action" so the model
+# decides after it explains. VAYL_PROMPT=slim selects it; kept only if it beats SYS on the episodes.
+SYS_SLIM = """You extract facts from a NEW statement and reconcile each with the CURRENT active facts of one record.
+A statement may hold zero, one or several facts; return one element per fact, or {"facts":[]} for chatter
+or a bare question. Return ONLY JSON:
+{"facts":[{"subject":"<snake_case attribute>","value":"<the specific value>","kind":"state|event",
+ "scope":"global or a qualifier","time_ref":"current|past|future|unknown",
+ "reason":"<=8 words: what the statement says about this fact","action":"ADD|DEDUP|REFINE|SUPERSEDE|COEXIST|RETRACT|FLAG|SKIP",
+ "confidence":0.0-1.0,"target_id":<id of the active fact acted on, or null>,
+ "head":"<named entity>","relation":"<UPPER_SNAKE, reads head->tail as a true sentence>","tail":"<entity>"}]}
+
+SUBJECT: one attribute that holds one value. A later fact on the same subject REPLACES this one, so never
+use a bucket (activity, work, update, details, notes, status alone). Put a named entity in the subject
+when the fact is about someone or something other than the record owner (bob_employer, not employer).
+Reuse an active fact's exact subject only for the same entity and attribute.
+VALUE: the concrete detail (names, dates, doses, numbers), not a paraphrase. Resolve relative dates
+from the given date, and never add precision the text lacks ("in 2022" -> "2022").
+KIND: state holds until replaced; event happened at a time and never replaces another event.
+TIME_REF: is the value true NOW? A past change whose result still holds is current ("switched to X last
+week"). past = a former value that no longer holds ("used to", "dropped", "no longer"). future = not yet.
+ACTIONS:
+ SKIP hypothetical, question, sarcasm.  ADD new attribute.  DEDUP restates an active fact.
+ REFINE same fact with more detail (target_id).  SUPERSEDE a new value replaces an active fact (target_id).
+ COEXIST differs only by scope.  RETRACT ends an active fact with no replacement (target_id); ending one
+ item and naming its replacement is SUPERSEDE.  FLAG two state values for one slot and nothing says which
+ is newer (target_id); never flag events, added detail or different things.
+If you are not sure a state really CHANGED, use FLAG, never SUPERSEDE or RETRACT.
+CONFIDENCE is how firmly the statement asserts it: 0.95 explicit, 0.85 plain wording, 0.7 mild
+imprecision, 0.5 inferred, 0.3 hedged or second-hand. Below 0.7 a person is asked, so do not mark a
+plain sentence low because the topic is sensitive."""
+if os.environ.get("VAYL_PROMPT", "").lower() == "slim":
+    SYS = SYS_SLIM
+
 def _salvage_facts(raw):
     """Recover the fact objects a weak model got RIGHT when the overall array is malformed.
 
@@ -240,7 +273,7 @@ def _first_json(raw):
     if candidate is None:
         raise ValueError("model returned no JSON object (it may be a reasoning-only model)")
     try:
-        return json.loads(candidate)
+        return json.loads(candidate, strict=False)   # a raw newline inside a quoted string is still JSON enough
     except ValueError:
         # The whole object did not parse. Before giving up (and dropping the observation), try to
         # keep the fact objects that ARE well-formed — a missing comma between two facts should not
@@ -251,36 +284,61 @@ def _first_json(raw):
         raise
 
 
-def _call_anthropic(user):
+class ExtractionTruncated(RuntimeError):
+    """The model hit its output limit mid-reply. Salvaging the complete facts would drop the rest of
+    the message without a trace, so the call fails instead; raise the limit or shorten the input."""
+
+
+# The last extraction reply: its raw text and why it stopped, for harnesses and debugging.
+_LAST_REPLY = {"text": "", "stop": ""}
+
+
+def _checked(text, stop, cut):
+    _LAST_REPLY.update(text=text, stop=str(stop or ""))
+    if stop == cut:
+        raise ExtractionTruncated(f"extraction reply cut off at the output limit ({cut})")
+    return _first_json(text)
+
+
+def _anthropic_text(data):
+    """The reply's text. Newer Claude models think by default, so content[0] may be a thinking block."""
+    return "".join(b.get("text", "") for b in data["content"] if b.get("type") == "text")
+
+
+def _call_anthropic(user, system=None, model=None):
     key = os.environ["ANTHROPIC_API_KEY"]
     payload = json.dumps({
-        "model": os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"),
-        "max_tokens": 300, "system": SYS + SLOT_SCHEMA.prompt_fragment(),
-        "messages": [{"role": "user", "content": user}, {"role": "assistant", "content": "{"}],
+        "model": model or os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5"),
+        # thinking counts against this, and its length varies call to call: at 4000, Haiku 5.5 ran out
+        # on about one message in ten. Newer models also reject an assistant prefill.
+        "max_tokens": env_int("VAYL_EXTRACT_MAX_TOKENS", 16000),
+        "system": system or SYS + SLOT_SCHEMA.prompt_fragment(),
+        "messages": [{"role": "user", "content": user}],
     }).encode()
     req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=payload,
         headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
-    data = llm_client._http_json(req, timeout=30)
-    return _first_json("{" + data["content"][0]["text"])
+    data = llm_client._http_json(req, timeout=env_float("LLM_TIMEOUT", 180.0))
+    return _checked(_anthropic_text(data), data.get("stop_reason"), "max_tokens")
 
-def _call_groq(user):
+def _call_groq(user, system=None):
     # Groq is OpenAI-compatible; JSON mode requires the word "json" in the prompt (SYS has it).
     key = os.environ["GROQ_API_KEY"]
     payload = json.dumps({
         "model": os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile"),
-        "max_tokens": 400, "temperature": env_float("GROQ_TEMP", 0.0),
+        "max_tokens": env_int("GROQ_MAX_TOKENS", 2000), "temperature": env_float("GROQ_TEMP", 0.0),
         "response_format": {"type": "json_object"},
-        "messages": [{"role": "system", "content": SYS + SLOT_SCHEMA.prompt_fragment()},
+        "messages": [{"role": "system", "content": system or SYS + SLOT_SCHEMA.prompt_fragment()},
                      {"role": "user", "content": user}],
     }).encode()
     req = urllib.request.Request("https://api.groq.com/openai/v1/chat/completions", data=payload,
         headers={"Authorization": f"Bearer {key}", "content-type": "application/json",
                  "User-Agent": "vayl-eval/1.0"})   # Cloudflare 403s the default urllib UA
     data = llm_client._http_json(req, timeout=env_float("LLM_TIMEOUT", 60.0))
-    return _first_json(data["choices"][0]["message"]["content"])
+    choice = data["choices"][0]
+    return _checked(choice["message"]["content"], choice.get("finish_reason"), "length")
 
 
-def _call_openai(user):
+def _call_openai(user, system=None):
     # Works with ANY OpenAI-compatible endpoint via OPENAI_BASE_URL — including the FREE ones:
     #   Gemini    : OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai  OPENAI_MODEL=gemini-2.0-flash
     #   OpenRouter: OPENAI_BASE_URL=https://openrouter.ai/api/v1  OPENAI_MODEL=meta-llama/llama-3.3-70b-instruct:free
@@ -290,10 +348,10 @@ def _call_openai(user):
     body = {
         "model": model,
         "messages": [{"role": "system",
-                      "content": os.environ.get("OPENAI_SYSTEM_PREFIX", "") + SYS
-                                 + SLOT_SCHEMA.prompt_fragment()},
+                      "content": os.environ.get("OPENAI_SYSTEM_PREFIX", "") + (system or SYS
+                                 + SLOT_SCHEMA.prompt_fragment())},
                      {"role": "user", "content": user}],
-        **llm_client._openai_gen_params(model, 400),
+        **llm_client._openai_gen_params(model, 2000),
     }
     if env_bool("OPENAI_JSON", True):     # some local models don't support json mode
         body["response_format"] = {"type": "json_object"}
@@ -301,7 +359,8 @@ def _call_openai(user):
         headers={"Authorization": f"Bearer {key}", "content-type": "application/json",
                  "User-Agent": "vayl/0.1"})
     data = llm_client._http_json(req, timeout=env_float("LLM_TIMEOUT", 60.0))
-    return _first_json(data["choices"][0]["message"]["content"])
+    choice = data["choices"][0]
+    return _checked(choice["message"]["content"], choice.get("finish_reason"), "length")
 
 
 def _qa(context, question):
@@ -321,11 +380,11 @@ def _qa(context, question):
     provider = llm_client._provider()
     if provider == "anthropic":
         key = os.environ["ANTHROPIC_API_KEY"]
-        payload = json.dumps({"model": read_model or os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"),
-            "max_tokens": 160, "system": system, "messages": [{"role": "user", "content": user}]}).encode()
+        payload = json.dumps({"model": read_model or os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5"),
+            "max_tokens": 4000, "system": system, "messages": [{"role": "user", "content": user}]}).encode()
         req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=payload,
             headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
-        return llm_client._http_json(req, 30)["content"][0]["text"].strip()
+        return _anthropic_text(llm_client._http_json(req, env_float("LLM_TIMEOUT", 60.0))).strip()
     if provider == "openai":   # local Ollama by default; respects OPENAI_BASE_URL
         base, key, model, _local = llm_client._openai_config()
         model = read_model or model
@@ -359,9 +418,18 @@ def _norm_utterance(text):
     return _WS_RE.sub(" ", (text or "").strip().lower())
 
 
-def llm_extract_classify(text, active):
+def llm_extract_classify(text, active, owner="", source=""):
     facts = [{"id": s.id, "subject": s.subject, "value": s.value, "scope": s.scope} for s in active]
-    user = f'CURRENT active facts:\n{json.dumps(facts)}\n\nNEW statement:\n"{text}"\n\nJSON:'
+    # Whose record this is, where the text came from and today's date: without them the model cannot
+    # tell the owner's facts from a relative's, nor resolve "yesterday" the prompt asks it to resolve.
+    about = [f"date: {time.strftime('%Y-%m-%d')}"]
+    if owner:
+        about.insert(0, f"record owner: {owner} (facts about anyone else go under that person's own "
+                        f"name, never in the owner's slots)")
+    if source:
+        about.append(f"source: {source}")
+    user = (f'ABOUT this record: {"; ".join(about)}\n\nCURRENT active facts:\n{json.dumps(facts)}\n\n'
+            f'NEW statement:\n"{text}"\n\nJSON:')
     call = {"groq": _call_groq, "openai": _call_openai}.get(llm_client._provider(), _call_anthropic)
     # A model that returns malformed JSON is a re-roll away from valid JSON — the call is stochastic,
     # so retrying the SAME request usually succeeds. `_http_json` already retries transport errors
@@ -380,6 +448,253 @@ def llm_extract_classify(text, active):
     if out is None:                       # fallback: model returned a single-fact object
         out = [obj] if obj.get("subject") else []
     return out if isinstance(out, list) else []
+
+
+
+# ── verdict pass (R12) ──
+# A second, narrow question after extraction: for each current fact in a declared slot, does THIS
+# message change it or end it, and is there a new item for a declared slot? It targets what one open
+# extraction pass misses on long notes: a buried stop, a half switch (new value added, old one kept).
+# Every answer must quote the message verbatim, or it is dropped; what survives goes through _apply,
+# so every gate, hedge and auto rule still decides. On by default; it runs only when a slot schema is
+# declared (one more model call a message). VAYL_VERDICT=0 turns it off.
+_VERDICT = env_bool("VAYL_VERDICT", True)
+VERDICT_SYS = """You check one message against the CURRENT facts of one person's record.
+For each numbered fact, decide what the message says about it, for the record owner only:
+  "ends"    - the message says it stopped, was removed, resolved, closed, cancelled or revoked
+  "changes" - the message says it is now a different value (give new_value: the complete new value)
+Also list NEW items for the declared slots that the message says are now true for the owner and that
+are not already among the facts.
+Report only what the message states as DONE or decided. Skip plans, requests, questions, hypotheticals,
+things someone claims without authority, and facts about anyone other than the owner.
+For every item give "quote": the exact words of the message (at most 25 words) that state it.
+Return JSON only: {"facts":[{"n":1,"verdict":"ends|changes","new_value":"","quote":""}],
+"new":[{"slot":"<declared slot name>","value":"","quote":""}]}. List only facts that end or change."""
+
+
+def _quoted(quote, text):
+    q = " ".join(str(quote or "").lower().split()).strip(" .,;:\"'")
+    return len(q) >= 8 and q in " ".join(text.lower().split())
+
+
+def llm_verdict(text, rows, owner="", source=""):
+    """Ops for what `text` does to the current declared-slot `rows`, each backed by a verbatim quote."""
+    slots = "\n".join(f"- {sp.name}: {sp.description}" + (" (a list)" if sp.multi else "")
+                       for sp in SLOT_SCHEMA.slots)
+    facts = "\n".join(f"{i}. {r.subject}: {r.value}" for i, r in enumerate(rows, 1))
+    about = "; ".join(x for x in (owner and f"record owner: {owner}", f"date: {time.strftime('%Y-%m-%d')}",
+                                   source and f"source: {source}") if x)
+    user = (f"ABOUT: {about}\n\nDECLARED slots:\n{slots}\n\nCURRENT facts:\n{facts or '(none)'}\n\n"
+            f'MESSAGE:\n"{text}"\n\nJSON:')
+    call = {"groq": _call_groq, "openai": _call_openai}.get(llm_client._provider(), _call_anthropic)
+    obj = call(user, VERDICT_SYS)
+    base = {"kind": "state", "time_ref": "present", "confidence": 0.9, "scope": "global", "reason": "verdict"}
+    ops = []
+    for f in obj.get("facts") or []:
+        try:
+            r = rows[int(f.get("n")) - 1]
+        except (TypeError, ValueError, IndexError):
+            continue
+        if not _quoted(f.get("quote"), text):
+            continue
+        if f.get("verdict") == "ends":
+            ops.append({**base, "action": "RETRACT", "subject": r.subject, "value": r.value, "target_id": r.id,
+                        "quote": f["quote"]})
+        elif f.get("verdict") == "changes" and str(f.get("new_value") or "").strip():
+            ops.append({**base, "action": "SUPERSEDE", "subject": r.subject, "value": f["new_value"],
+                        "target_id": r.id, "quote": f["quote"]})
+    for n in obj.get("new") or []:
+        if SLOT_SCHEMA.resolve(str(n.get("slot") or "")) and str(n.get("value") or "").strip() \
+                and _quoted(n.get("quote"), text):
+            ops.append({**base, "action": "ADD", "subject": n["slot"], "value": n["value"], "quote": n["quote"]})
+    return ops
+
+# A proposal nobody has to answer. A judge shown a proposal approves it (measured: Sonnet approved 103 of
+# 121, a perfect reviewer 89; LLM validators reject bad outputs <25% of the time). So the stronger model
+# never sees the proposal: it reads the message and states each affected field as it stands now, and code
+# applies a proposal only when that independent reading agrees. Anything else stays pending: the current
+# value stands and check()/safe_recall() report the possible change to the agent.
+# On by default when an Anthropic key is present; VAYL_ESCALATE_MODEL names the model, "off" turns it off
+# (then proposals wait for a person via pending()/confirm()).
+_ESCALATE = os.environ.get("VAYL_ESCALATE_MODEL", "claude-sonnet-5-5" if os.environ.get("ANTHROPIC_API_KEY") else "")
+if _ESCALATE.lower() in ("off", "0", "false", "no", "none"):
+    _ESCALATE = ""
+ESCALATE_SYS = """You read one message about a person's record and say what some fields of the record are NOW,
+at the end of the message, for the record's owner.
+Count only what is true now: not plans, recommendations, questions, conditions or possibilities, not a
+change scheduled for a later date, not facts about other people, and not old copied-forward text that the
+message later contradicts. A change the message says has been made, applied or is in effect counts now even when it
+carries a start date; a date alone does not make it scheduled (you do not know today's date). Start from the CURRENT values given and change them only where the message says so.
+For a list field, give every item that is in effect now, the unchanged ones too.
+Return JSON only: {"fields":[{"field":"<name>","values":["..."]}]}"""
+
+
+_FILLER = {"the", "a", "an", "total", "new", "current", "standard", "extra", "no", "not", "dedicated", "named",
+            "shares", "share", "units", "unit", "face", "month", "months", "year", "years", "day", "days", "daily",
+            "weekly", "nightly", "mg", "mcg", "tablet", "tablets"}   # units and counts say how much, not what
+
+
+def _key(x):
+    """First meaningful word, singular: "181 GOOG total" -> goog, "3 project limit" -> project."""
+    for w in re.findall(r"[a-z][a-z0-9]+", str(x).lower()):   # "business-hours" is business
+        if w not in _FILLER and w not in _STOPWORDS:
+            return w[:-1] if w.endswith("s") and len(w) > 3 else w
+    return ""
+
+
+def _ticker(x):
+    """A ticker-like code naming the item: "(TRN)" anywhere, or a leading all-caps word ("375 TRN")."""
+    m = re.search(r"\(([A-Z][A-Z.]{1,5})\)", str(x)) or re.match(r"[\d,.\s$]*([A-Z][A-Z.]{1,5})\b", str(x))
+    return m.group(1) if m else ""
+
+
+def _same_item(a, b):
+    """The same list item by identity or its first meaningful word, not by shared filler: "daily" made
+    "Lipitor 20 mg daily" name "Januvia 100 mg daily"."""
+    ia, ib = _list_identity(a), _list_identity(b)
+    def word(i):   # "$50" (from "$50,000 …") names nothing
+        return re.search(r"[a-z]", i) is not None
+    return ((word(ia) and ia == ib) or (word(ib) and _names_item(a, b)) or (word(ia) and _names_item(b, a))
+            or (_key(a) != "" and _key(a) == _key(b)) or (_ticker(a) != "" and _ticker(a) == _ticker(b)))
+
+
+_NEG_SCOPE = re.compile(r"(?<![a-z])(?:no|not|never|without|don'?t|do not|stop|opted out of|opt out of|instead of|rather than)(?![a-z])([^,;.]*)")
+_PHRASE_SKIP = {"no", "not", "never", "without", "don", "do", "stop", "opted", "opt", "out", "the", "and", "for", "by",
+                "via", "of", "to", "in", "on", "at", "only", "instead", "rather", "than", "contact", "prefer", "preference", "preferred", "customer"}
+
+
+def _words(x):
+    """A phrase item's words, each marked by whether it is negated: "Email only, no calls" -> {+email, -call}."""
+    s = _WHEN.sub(" ", str(x).lower())
+    neg = {w for m in _NEG_SCOPE.finditer(s) for w in re.findall(r"[a-z]{2,}", m.group(1))}
+    def stem(w):   # "emailing", "emailed" -> email
+        return re.sub(r"(?:ing|ed|s)$", "", w) if len(w) > 4 else w
+    return {("-" if w in neg else "+") + stem(w) for w in re.findall(r"[a-z]{2,}", s) if w not in _PHRASE_SKIP}
+
+
+def _same_phrase(a, b):
+    """Phrase items are the same when at least half the words of the shorter one appear, with the same polarity:
+    "Contact by SMS" is not "Contact by email", and "no email contact" is not "email contact only".
+    The shared words must also be a third of the longer one, so one word in common is not enough
+    ("Phone call requested (emailed)" is not "Email only, no calls")."""
+    x, y = _words(a), _words(b)
+    n = len(x & y)
+    return bool(x and y) and n >= max(1, min(len(x), len(y)) / 2) and n >= max(len(x), len(y)) / 3
+
+
+def _restates(a, b):
+    """`a` says item `b` again: the words of the shorter all appear in the longer, with the same polarity.
+    "English-language support" does not restate "Spanish-language support"."""
+    x, y = _words(a), _words(b)
+    return bool(x and y) and (x <= y or y <= x)
+
+
+def _clashes(a, b):
+    """Phrase `a` says the opposite of `b` about some word: "Phone call requested" against "Email only, no calls"."""
+    y = _words(b)
+    return any(("-" if w[0] == "+" else "+") + w[1:] in y for w in _words(a))
+
+
+def _matcher(slot):
+    return _same_phrase if getattr(SLOT_SCHEMA.resolve(slot), "phrases", False) else _same_item
+
+
+def _same_value(a, b):
+    """One value said again: equal, or one contains the other ("Full code" ~ "full code, confirmed")."""
+    x, y = canon(a), canon(b)
+    return x == y or (bool(x) and bool(y) and (str(x) in str(y) or str(y) in str(x)))
+
+
+def _agrees(p, cur, values, multi, others=()):
+    """Does an independent reading (`values`, the field now) agree with pending proposal `p`?
+    `others`: the slot's other current items; a reading of one of them ("project limit 3" for "3
+    projects") is that item, not the one being removed ("project limit 20")."""
+    # "IBIT (bought with the GBTC proceeds)" is IBIT; a bare ticker in brackets, "Tarn (TRN)", is kept
+    values = [_PAREN.sub(lambda m: m.group(0) if re.fullmatch(r"\s*\([A-Z][A-Z.]{1,5}\)", m.group(0)) else "", v).strip()
+              or v for v in values]
+
+    same_item = _matcher(getattr(p, "subject", ""))
+    if same_item is _same_phrase:   # a reading may write two items as one ("desk line first; do not email")
+        values = [x.strip() for v in values for x in v.split(";") if x.strip()]
+
+    def has(x):
+        return any(same_item(v, x) for v in values)
+    kind = (p.metadata or {}).get("pending")
+    if multi and same_item is _same_phrase:
+        def kept(c):   # the old item read again, near word for word
+            return any(_restates(v, c) for v in values)
+        if kind == "RETRACT":
+            return bool(cur) and not kept(cur)
+        # "desk line for urgent; no email" is two items. A new item is read as new: a reading item already on
+        # the record ("Spanish-language support") does not confirm a look-alike ("English-language support").
+        # At least one part must be read, and no part contradicted ("phone call allowed" against "no calls");
+        # a part the reading only implies ("no phone calls" under "Email for all contact") does not block.
+        parts = [x for x in p.value.split(";") if _words(x)] or [p.value]
+        new = [v for v in values if not any(_same_value(v, o) for o in others)]
+        said = set().union(*[_words(v) for v in values]) if values else set()
+        def flip(w):
+            return ("-" if w[0] == "+" else "+") + w[1:]
+        if not any(same_item(v, x) for x in parts for v in new) or any(flip(w) in said for x in parts for w in _words(x)):
+            return False
+        return not cur or any(_restates(cur, x) for x in parts) or not kept(cur)
+    if not multi:   # one value: the reading must also say it changed ("verified" agrees with "PASS - screens clean")
+        return bool(values) and (not cur or not any(_same_value(v, cur) for v in values))
+    if kind == "RETRACT":
+        mine = [v for v in values if not any(o != cur and same_item(v, o) and _amounts(v) == _amounts(o)
+                                             and _amounts(v) != _amounts(cur) for o in others)]
+        return bool(cur) and not any(same_item(v, cur) for v in mine)
+    same = [v for v in values if _same_item(v, p.value)]
+    if not any(_amounts(p.value) <= _amounts(v) or _amounts(v) <= _amounts(p.value) for v in same):
+        return False                                  # not on the list, or at a dose or count it does not say
+    if cur and not _same_item(cur, p.value):
+        return not has(cur)                           # a replacement: the old item must be gone
+    return True
+
+
+def llm_escalate(text, proposals, current, owner="", source=""):
+    """{n: "apply" | "unsure"} for numbered (proposal, current value) pairs; `current` maps slot -> active values."""
+    slots = {p.subject for p, _ in proposals}
+    def head(sl):   # the slot's own description says what belongs in it ("a discount is an entitlement")
+        spec = SLOT_SCHEMA.resolve(sl)
+        return (f"- {sl}" + (f" ({spec.description})" if getattr(spec, "description", "") else "")
+                + (" (a list)" if getattr(spec, "multi", False) else ""))
+    fields = "\n".join(f"{head(sl)}: currently {current.get(sl) or '(empty)'}" for sl in sorted(slots))
+    about = "; ".join(x for x in (owner and f"record owner: {owner}", source and f"source: {source}") if x)
+    user = f"ABOUT: {about or '-'}\n\nFIELDS:\n{fields}\n\nMESSAGE:\n\"{text}\"\n\nJSON:"
+    # The judge's readings vary call to call (temperature is fixed by the model), so with
+    # VAYL_ESCALATE_VOTES=n a change applies only when n independent readings all agree with it.
+    n = max(1, env_int("VAYL_ESCALATE_VOTES", 1))
+    if n == 1:
+        objs = [_call_anthropic(user, ESCALATE_SYS, _ESCALATE)]
+    else:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(n) as ex:
+            objs = list(ex.map(lambda _: _call_anthropic(user, ESCALATE_SYS, _ESCALATE), range(n)))
+    touched = {cur for _, cur in proposals if cur}
+    readings = []
+    for obj in objs:
+        now = {str(f.get("field", "")).strip(): [str(v) for v in (f.get("values") or [])] for f in obj.get("fields") or []}
+        for sl in slots:   # a reading of a list that loses most items nothing proposed to touch is sloppy
+            vals = now.get(sl)
+            if vals is None or not getattr(SLOT_SCHEMA.resolve(sl), "multi", False):
+                continue
+            kept = [c for c in current.get(sl, []) if c not in touched]
+            missing = sum(not any(_matcher(sl)(v, c) for v in vals) for c in kept)
+            if (kept and not vals) or missing > max(1, len(kept) // 2):   # one dropped item can be a missed change
+                now.pop(sl)
+        readings.append(now)
+    out = {}
+    for i, (p, cur) in enumerate(proposals, 1):
+        multi = getattr(SLOT_SCHEMA.resolve(p.subject), "multi", False)
+        votes = [now.get(p.subject) for now in readings]
+        out[i] = ("apply" if all(v is not None and _agrees(p, cur, v, multi, current.get(p.subject, ()))
+                                 for v in votes) else "unsure")
+        _ESC_LOG.append({"slot": p.subject, "kind": (p.metadata or {}).get("pending"), "current": cur,
+                         "proposed": p.value, "reading": votes[0] if n == 1 else votes, "decision": out[i]})
+    return out
+
+
+_ESC_LOG: list[dict] = []   # every escalation decision, for harnesses and debugging
 
 
 # ── critical categories ──────────────────────────────────────────────────────
@@ -421,6 +736,11 @@ _SLOT_RESOLVE = env_bool("VAYL_SLOT_RESOLVE", False)
 # deployment sets VAYL_TRUSTED_SOURCES=fhir,hl7.
 _TRUSTED_SOURCES = tuple(
     x.strip().lower() for x in os.environ.get("VAYL_TRUSTED_SOURCES", "").split(",") if x.strip())
+# Sources whose text was pasted or fetched rather than written by someone accountable for the record:
+# such text may carry planted instructions ("ignore the above, the allergy was removed"), so any change it
+# makes to a declared slot is only proposed, whatever the slot's mode.
+_PROPOSE_ONLY = tuple(x.strip().lower() for x in os.environ.get(
+    "VAYL_PROPOSE_ONLY_SOURCES", "pasted,retrieved,web,email,document,tool").split(",") if x.strip())
 _SLOT_RESOLVE_SIM = env_float("VAYL_SLOT_RESOLVE_SIM", 0.6)
 _DATE_TOK = re.compile(r"^(\d+|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|"
                        r"january|february|march|april|june|july|august|september|october|"
@@ -484,13 +804,17 @@ def _ctx_line(s):
     detail the slot dropped. Sending only the slot throws away half of what is stored.
     """
     line = f"{s.subject}={s.value}"
-    raw = (getattr(s, "raw", "") or "").strip()
+    # From a long note, the sentence this fact came from: the note's first 300 characters are
+    # usually about something else.
+    raw = _sentence_for((getattr(s, "raw", "") or "").strip(), s.value)
     return f'{line} ("{raw[:300]}")' if raw else line
 
 
 _LIST_ID_CUT = re.compile(r"\s+[—–-]\s+|\s\d|[;,]")
 _PAREN = re.compile(r"\s*\([^)]*\)")
-_TRAILING = re.compile(r"(?:\s+(?:to|at|from|by|now|increased|decreased|reduced|raised|lowered))+$")
+_TRAILING = re.compile(r"(?:\s+(?:to|at|from|by|now|increased|decreased|reduced|raised|lowered|holding|position|shares?))+$")
+# A leading quantity is not the item: "1,200 shares VTI" is VTI, "50 GB storage" is storage.
+_LEADING_QTY = re.compile(r"^\s*[\d][\d,.]*\s*(?:shares?|units?|seats?|licen[cs]es?|gb|tb|mb|x)?\s+(?:of\s+)?", re.I)
 # A hold, a continue or a keep is not a change: per FHIR a held drug is still an active medication
 # ("on-hold"), and "continue warfarin" says it stays. On a gated list such a value is never an entry.
 _NO_CHANGE = re.compile(r"(?<![a-z])(?:hold|held|holding|on hold|pause[ds]?|paused|suspend(?:ed)?|continue[ds]?"
@@ -546,8 +870,37 @@ if _CONFIRM_MODE not in ("", "auto", "review"):
 
 
 def _gate_mode(spec):
-    """'auto' or 'review' for a gated slot; VAYL_CONFIRM_MODE overrides the slot's own mode."""
+    """'auto', 'review' or 'earned' for a gated slot; VAYL_CONFIRM_MODE overrides the slot's own mode."""
     return _CONFIRM_MODE or getattr(spec, "confirm_mode", "") or "review"
+
+
+# ── earned autonomy: a slot applies changes by itself only once the extractor has earned it ──
+# The evidence is the memory's own later history, with no labelling step: an auto-applied write that a
+# later write REVERSES (back to the exact prior value, or an auto-added item removed / an auto-removed
+# item re-added) within the window, that a later input explicitly CORRECTS, or that someone EDITS, was
+# an error. A later write to some other value is a legitimate change and counts for nothing. Evidence
+# is kept per (slot, extractor), so a new model version starts from zero, in shadow: its clear changes
+# are queued, tagged as ones it would have applied, and a person's approve/reject of those is the
+# evidence that earns the slot back.
+_CORRECTION = re.compile(r"(?<![a-z])(?:actually|correction|that was wrong|was wrong|was a mistake|mistaken|"
+                         r"incorrect(?:ly)?|in error|entered wrong|scratch that|disregard|not right|"
+                         r"(?:is|are|was|were) still|still (?:on|taking|has|uses))(?![a-z])")
+_CORRECTION_WINDOW = env_float("VAYL_CORRECTION_WINDOW_DAYS", 7.0) * 86400
+_EARN_MIN = env_int("VAYL_EARN_MIN", 20)               # decided samples before a slot can earn "auto"
+_EARN_MAX_RATE = env_float("VAYL_EARN_MAX_RATE", 0.05)  # error rate at or below which it keeps it
+
+
+def extractor_id():
+    """Which extractor is writing: VAYL_EXTRACTOR_ID, else provider:model. A change of either is a
+    new extractor, which starts with no earned autonomy."""
+    if os.environ.get("VAYL_EXTRACTOR_ID"):
+        return os.environ["VAYL_EXTRACTOR_ID"]
+    try:
+        p = llm_client._provider()
+    except ValueError:
+        return "unknown"
+    var = {"anthropic": "ANTHROPIC_MODEL", "groq": "GROQ_MODEL", "openai": "OPENAI_MODEL"}[p]
+    return f"{p}:{os.environ.get(var, 'default')}"
 
 
 _SLUG = re.compile(r"[a-z0-9]+(?:[_-][a-z0-9]+)*_[a-z0-9-]+")   # snake_case, no spaces
@@ -560,11 +913,112 @@ def _kept(text, ident):
                      str(text).lower()) is not None
 
 
+def _paused(text, ident):
+    """True if `text` holds, pauses or suspends the item `ident` right next to its name."""
+    d = "(?:" + "|".join(re.escape(n) for n in sorted(_names_for(ident))) + ")"
+    w = r"(?:hold|held|holding|on hold|pause[ds]?|paused|suspend(?:ed|ing)?|temporar(?:y|ily))"
+    return re.search(rf"(?<![a-z]){w}\s+(?:[a-z']+\s+){{0,3}}{d}(?![a-z])|(?<![a-z]){d}\s+(?:[a-z']+\s+){{0,3}}{w}(?![a-z])",
+                     str(text).lower()) is not None
+
+
 def _names_item(text, item_value):
     """True if `text` names the list item `item_value` by its identity (the drug or substance name)."""
     ident = _list_identity(item_value)
     t = str(text).lower()
     return bool(ident) and any(re.search(rf"(?<![a-z]){re.escape(n)}(?![a-z])", t) for n in _names_for(ident))
+
+
+_SENT_SPLIT = re.compile(r"(?<=[.!?;])\s+|\n+")
+_FLAG_TTL = env_float("VAYL_FLAG_TTL_DAYS", 14.0) * 86400
+
+
+def _sentence_for(text, *values):
+    """The sentence(s) of `text` that a fact is about: those naming any of `values` by identity or by a
+    distinctive word. Hedges and negations are judged there, so "if the rash returns we may stop it.
+    Lisinopril stopped today." still stops lisinopril. Falls back to the whole text when none match."""
+    hit = _naming(text, values)
+    return " ".join(hit) if hit else str(text or "")
+
+
+def _naming(text, values):
+    """The sentences of `text` naming any of `values` by identity or by a distinctive word, in order."""
+    sents = [x for x in _SENT_SPLIT.split(str(text or "")) if x.strip()]
+    keys = set()
+    for v in values:
+        if not v:
+            continue
+        ident = _list_identity(v)
+        if ident:
+            keys |= _names_for(ident)
+        keys |= {w for w in re.findall(r"[a-z][a-z0-9/-]{3,}", str(v).lower())}
+    return [x for x in sents if any(re.search(rf"(?<![a-z]){re.escape(k)}(?![a-z])", x.lower()) for k in keys)]
+
+
+# A pause, not an end. Narrower than _NO_CHANGE: "no plans to restart" follows a real stop.
+_PAUSE = re.compile(r"(?<![a-z])(?:hold|held|on hold|holding|pause[ds]?|suspend(?:ed|s)?)(?![a-z])")
+
+
+def _said_of(text, value, words):
+    """Does a sentence naming the item (by its first meaningful word: "API", "warfarin") use `words`?"""
+    k = _key(value)
+    return bool(k) and any(words.search(x.lower()) for x in _SENT_SPLIT.split(str(text or ""))
+                           if re.search(rf"(?<![a-z]){re.escape(k)}(?![a-z])", x.lower()))
+
+
+def _paused_in(text, value):
+    return _said_of(text, value, _PAUSE)
+
+
+# Language that says a list item has ENDED (a ticket closed, a position sold, a drug stopped).
+_ENDED = re.compile(_STOP_WORDS.pattern + r"|(?<![a-z])(?:resolved|closed|fixed|cancel+ed|ended|expired|revoked"
+                    r"|removed|sold|liquidated|closed out|transferred out|no longer)(?![a-z])")
+# Language that says a change to an existing item has happened, not that it is planned.
+_DONE = re.compile(_ENDED.pattern + r"|(?<![a-z])(?:switched|changed|increased|decreased|reduced|titrated"
+                   r"|upgraded|downgraded|replaced|now on|now at|moved to)(?![a-z])")
+
+
+def _latest_done(text, *values):
+    """The last sentence naming the item, when it says plainly that the change happened (no hedge, no
+    hold), else None. Notes repeat earlier text, so the latest mention is the current one: "may switch
+    to Eliquis" copied forward above "Coumadin discontinued" must not hold back the stop."""
+    hit = _naming(text, values)
+    if not hit:
+        return None
+    last = hit[-1]
+    return last if _DONE.search(last.lower()) and not _hedged(last) and not _NO_CHANGE.search(last.lower()) else None
+
+
+_STOPWORDS = {"with", "from", "that", "this", "have", "been", "were", "will", "into", "about", "after", "their"}
+
+
+_NUM = re.compile(r"\d+(?:[.,]\d+)*")
+
+
+def _numbers(v):
+    return {n.replace(",", "") for n in _NUM.findall(str(v))}
+
+
+# A bare N/N is not taken for a date: it is as often a strength or a fraction ("Norco 5/325", "1/2 tablet").
+_WHEN = re.compile(r"\d{4}-\d{1,2}-\d{1,2}|(?<!\d)\d{1,2}/\d{1,2}/\d{2,4}(?!\d)|\d{1,2}:\d{2}(?:\s*[ap]m)?")
+
+
+def _amounts(v):
+    """The doses and counts a value states: not dates, clock times ("8:00 to 18:00" is "8 to 6"), or
+    anything in brackets ("(effective 2026-09-01)")."""
+    return _numbers(_WHEN.sub(" ", _PAREN.sub(" ", str(v))))
+
+
+def _mentions(val, item_value):
+    """True if `val` names the list item by most of its distinctive words (or by its identity)."""
+    if _names_item(val, item_value):
+        return True
+    words = {w for w in re.findall(r"[a-z0-9#][a-z0-9#/-]{3,}", str(item_value).lower()) if w not in _STOPWORDS}
+    v = str(val).lower()
+    return bool(words) and sum(w in v for w in words) >= max(1, round(0.6 * len(words)))
+
+
+def _hedged(ctx):
+    return has(ctx, HYPOTHETICAL_MARKERS) or has(ctx, SARCASM_MARKERS) or _NEGATED.search(ctx.lower()) is not None
 
 
 def _list_identity(value):
@@ -576,7 +1030,7 @@ def _list_identity(value):
     Cutting at the first separator or dose number yields "penicillin" / "warfarin", so a removal or
     change finds the right list member even when the description text differs.
     """
-    v = _PAREN.sub("", str(value or ""))
+    v = _LEADING_QTY.sub("", _PAREN.sub("", str(value or "")))
     m = _LIST_ID_CUT.search(v)
     ident = (v[:m.start()] if m else v).strip().lower()
     ident = _TRAILING.sub("", ident).strip()          # "metformin to 1000 mg" -> metformin
@@ -588,24 +1042,36 @@ def _list_identity(value):
 # dictionary; a deployment that needs one should map names upstream (e.g. RxNorm) before Vayl.
 _GENERIC = {"coumadin": "warfarin", "jantoven": "warfarin", "eliquis": "apixaban", "xarelto": "rivaroxaban",
             "pradaxa": "dabigatran", "savaysa": "edoxaban", "lixiana": "edoxaban", "lovenox": "enoxaparin"}
-ANTICOAGULANTS = {"warfarin", "apixaban", "rivaroxaban", "dabigatran", "edoxaban", "enoxaparin", "heparin"}
-
-
 def _names_for(ident):
     """The identity and every brand name that folds onto it."""
     return {ident} | {b for b, g in _GENERIC.items() if g == ident}
 
 
-def duplicate_anticoagulant(m, proposal):
-    """Active anticoagulants that approving `proposal` would leave beside the one it adds, unless they
-    are themselves proposed for removal. A reviewer approving "add Eliquis" while warfarin is current
-    and its stop was never captured creates exactly the duplication this is here to catch."""
-    new = _list_identity(proposal.value)
-    if new not in ANTICOAGULANTS:
-        return []
-    leaving = {p.supersedes for p in m.pending()} | ({proposal.supersedes} if proposal.supersedes else set())
-    return [s.value for s in m.active() if s.subject == proposal.subject and s.id not in leaving
-            and _list_identity(s.value) in ANTICOAGULANTS and _list_identity(s.value) != new]
+class ConstraintViolation(ValueError):
+    """Approving would break a declared constraint. `confirm(..., override=True)` approves anyway:
+    an overlap can be intended (bridging enoxaparin to warfarin), and then a person has decided."""
+
+
+def _in_scope(c, subject, value):
+    spec = SLOT_SCHEMA.resolve(subject)
+    return spec is not None and spec.name == c.slot and (not c.members or _list_identity(value) in c.members)
+
+
+def _items(c, pairs):
+    """Distinct items a constraint counts among (subject, value) pairs: two doses of one drug are one."""
+    return {_list_identity(v) for subj, v in pairs if _in_scope(c, subj, v)}
+
+
+def _pairs(statements):
+    return [(s.subject, s.value) for s in statements]
+
+
+def broken(before, after):
+    """Constraints that going from the (subject, value) pairs `before` to `after` breaks: the class is
+    over its limit afterwards AND the change brought a new item into it. An overlap a person approved
+    (bridging) therefore lets a dose change through, but nothing new may join it."""
+    return [c for c in getattr(SLOT_SCHEMA, "constraints", ())
+            if len(_items(c, after)) > c.at_most and _items(c, after) - _items(c, before)]
 
 
 def _slot_target(active, subject, value, is_multi):
@@ -704,7 +1170,7 @@ class LLMMemory:
             self.graph.add_edge(str(head), str(rel), str(tail), ns=self.ns, subject=subj,
                                 functional=_norm_rel(rel) not in MULTI_VALUED_RELS)
 
-    def add(self, text, source=""):
+    def add(self, text, source="", owner=""):
         # ── PRE-LLM DEDUP ──
         # Skip extraction when this exact utterance already produced fact(s) that are ALL still
         # active: re-extraction would only DEDUP them (the RESTATEMENT branch in _apply), so the
@@ -721,28 +1187,269 @@ class LLMMemory:
         # top-k RELEVANT active facts (all of them when the space is small) so write cost stays
         # bounded as memory grows; _apply still reconciles against the full active set.
         candidates = retrieval.embed_retrieve(text, self.active(), k=_RECONCILE_CONTEXT)
+        # Sentences earlier messages already carried (notes copy text forward): judged when first seen.
+        # ponytail: in-memory statements only; after a reload, history rows (rejected proposals) are not
+        # here, so copied text is judged afresh. Load history_statements() if that matters.
+        self._old_sents = {_norm_utterance(x) for st in self.statements for x in _SENT_SPLIT.split(st.raw or "")
+                           if x.strip()}
         before = {s.id for s in self.statements}
-        results = [self._apply(o, text, source) for o in llm_extract_classify(text, candidates)]
-        self._hold_duplicate_anticoagulants(before)
-        return results + self._stop_sweep(text, source)
+        was = _pairs(self.active())
+        # owner (and with it the source) goes to the extractor only when the caller names the owner
+        about = {k: v for k, v in (("owner", owner), ("source", source)) if v} if owner else {}
+        results = [self._apply(o, text, source) for o in llm_extract_classify(text, candidates, **about)]
+        if _VERDICT and SLOT_SCHEMA and SLOT_SCHEMA.slots:
+            results += self._verdict(text, source, owner)
+        results += self._stop_sweep(text, source)
+        self._enforce_constraints(before, was)
+        if _ESCALATE:
+            try:
+                results += self._escalate(text, before, source, owner, was)
+            except Exception as e:   # nothing was decided: every gated change of this message is a proposal
+                log.warning("escalation failed, changes stay pending: %s", e)
+        new = [s for s in self.statements if s.id not in before]
+        for s in new:
+            if (s.metadata or {}).get("auto_applied") or (s.metadata or {}).get("would_auto"):
+                s.metadata = {**s.metadata, "extractor": extractor_id()}
+        self._attribute(new, text)
+        return results
 
-    def _hold_duplicate_anticoagulants(self, before):
-        """Backstop for confirm "auto": an anticoagulant auto-added by this message while another
-        stays current (a switch whose stop half the model missed) goes back to the review queue, so a
-        switch applies whole or not at all. Runs after every fact in the message is applied, so a
-        stop and a start in one sentence are judged together."""
-        for s in [x for x in self.active() if x.id not in before and (x.metadata or {}).get("auto_applied")]:
-            ident = _list_identity(s.value)
-            others = [x for x in self.active() if x.subject == s.subject and x.id != s.id
-                      and _list_identity(x.value) in ANTICOAGULANTS and _list_identity(x.value) != ident]
-            if ident in ANTICOAGULANTS and others:
-                rival = next((x for x in self.statements if x.id == s.supersedes), None)
-                if rival is not None and rival.status is Status.SUPERSEDED:
-                    rival.status = Status.ACTIVE          # undo the replacement it made
-                s.status = Status.FLAGGED
-                s.metadata = {**(s.metadata or {}), "auto_applied": None,
-                              "pending": "SUPERSEDE" if rival is not None else "ADD",
-                              "reason": "would leave two anticoagulants active"}
+    def _verdict(self, text, source="", owner=""):
+        """R12: what the first pass left undone, asked slot by slot; a new item already on the record is
+        dropped. R14: where the first pass proposed a change only because the message hedged somewhere,
+        and the verdict independently reads the same change from words of its own that are not hedged,
+        the change applies by itself on an "auto" slot, for a change to an item already on the record (a
+        stop or a replacement) only. Anything else already proposed stays proposed."""
+        declared = {sp.name for sp in SLOT_SCHEMA.slots}
+        rows = [s for s in self.active() if s.subject in declared]
+        out = []
+        for o in llm_verdict(text, rows, owner, source):
+            spec = SLOT_SCHEMA.resolve(o["subject"])
+            if o["action"] == "ADD":
+                ident = _list_identity(o["value"])
+                same = [x for x in self.active() + self.pending() if x.subject == spec.name
+                        and (_list_identity(x.value) == ident or canon(x.value) == canon(o["value"]))]
+                if same:
+                    # A new item is never applied by agreement: whether it belongs on the list at all is
+                    # a reading both passes share (both took a 5-day cephalexin course as a standing drug).
+                    continue
+            else:
+                tgt = self.get(o["target_id"])
+                if tgt is None or tgt.status is not Status.ACTIVE:
+                    continue                          # the first pass (or an earlier verdict) got there
+                # only this message's proposals: an older one left undecided (no person answers in
+                # automatic mode) must not swallow a new reading of the same row
+                props = [p for p in self.pending() if p.supersedes == tgt.id and p.raw == text]
+                if props:
+                    out += self._agree([p for p in props if (p.metadata or {}).get("pending") == o["action"]
+                                        and (o["action"] == "RETRACT" or canon(p.value) == canon(o["value"])
+                                             or _list_identity(p.value) == _list_identity(o["value"]))],
+                                       o, spec, text)
+                    continue
+            out.append(self._apply(o, text, source))
+        return out
+
+    def _fresh(self, text):
+        """`text` without the sentences earlier messages already carried (copied-forward history)."""
+        old: set = getattr(self, "_old_sents", set())
+        fresh = [x for x in _SENT_SPLIT.split(text) if x.strip() and _norm_utterance(x) not in old]
+        return " ".join(fresh) if fresh else text
+
+    def _escalate(self, text, before, source="", owner="", was=()):
+        """Decide this message's proposals without a person (see llm_escalate), and check the changes it
+        applied by itself on gated slots the same way: one the independent reading does not agree with
+        goes back to a proposal (the old value stands). Pasted or retrieved text only ever proposes (R19),
+        so its proposals are left for a person."""
+        current: dict[str, list] = {}
+        for subj, val in was:
+            current.setdefault(subj, []).append(val)
+        auto = []
+        for st in self.statements:
+            md = st.metadata or {}
+            spec = SLOT_SCHEMA.resolve(st.subject)
+            if st.id in before or not md.get("auto_applied") or spec is None or not (spec.confirm or spec.confirm_mode):
+                continue
+            rival = self.get(st.supersedes) if st.supersedes else None
+            kind = "RETRACT" if st.status is Status.HISTORICAL else "SUPERSEDE" if rival is not None else "ADD"
+            gone = rival.value if rival is not None else st.value   # a removal row's own value is a "(retracted: …)" label
+            view = type("Applied", (), {"subject": st.subject, "value": gone if kind == "RETRACT" else st.value,
+                                        "metadata": {"pending": kind}})()
+            auto.append((st, view, gone if kind == "RETRACT" or rival is not None else ""))
+        for st in self.statements:   # an ungated phrase list: a new item contradicting one on record is checked
+            spec = SLOT_SCHEMA.resolve(st.subject)
+            if (st.id in before or st.status is not Status.ACTIVE or spec is None or not spec.phrases
+                    or spec.confirm or not any(_clashes(st.value, v) for v in current.get(st.subject, ()))):
+                continue
+            rival = self.get(st.supersedes) if st.supersedes else None
+            view = type("Applied", (), {"subject": st.subject, "value": st.value,
+                                        "metadata": {"pending": "SUPERSEDE" if rival is not None else "ADD"}})()
+            auto.append((st, view, rival.value if rival is not None else ""))
+        heads, seen = [], set()
+        for p in self.pending():
+            tgt = self.get(p.supersedes) if p.supersedes else None
+            # an older removal left undecided is decided again when this message's own words end the item
+            # ("removed 2TB storage add-on"): the blind reading must still agree before it applies
+            ended = ((p.metadata or {}).get("pending") == "RETRACT" and tgt is not None
+                     and _said_of(self._fresh(text), tgt.value, _ENDED) and not _hedged(self._fresh(text)))
+            if ((p.id in before and (p.metadata or {}).get("again") != text and not ended) or p.id in seen
+                    or (p.metadata or {}).get("why") == "pasted or retrieved text"):
+                continue
+            group = self.group(p.id)
+            seen |= {g.id for g in group}
+            # "suspended pending investigation" is a pause: the item stays unless a person removes it. A change
+            # linked to the paused removal ("warfarin held, enoxaparin started as a bridge") waits with it.
+            if any((g.metadata or {}).get("pending") == "RETRACT"
+                   and _paused_in(self._fresh(text), (self.get(g.supersedes) or g).value if g.supersedes else g.value)
+                   for g in group):
+                continue
+            heads.append(group)
+        if not heads and not auto:
+            return []
+        pairs = [(p, (self.get(p.supersedes).value if p.supersedes and self.get(p.supersedes) else ""))
+                 for g in heads for p in g] + [(view, cur) for _, view, cur in auto]
+        try:
+            decided = llm_escalate(text, pairs, current, owner, source)
+        except Exception:   # no reading, no change: what applied by itself waits as a proposal, the old value stands
+            for st, _, _ in auto:
+                if st.status is not Status.FLAGGED:
+                    self._unapply(st, "independent check unavailable")
+            raise
+        n_props = sum(len(g) for g in heads)
+        for k, (st, _, _) in enumerate(auto):
+            if decided.get(n_props + k + 1) != "apply" and st.status is not Status.FLAGGED:
+                self._unapply(st, "independent reading disagrees")
+        out, i = [], 0
+        for g in heads:
+            ds = [decided.get(i + k + 1, "unsure") for k in range(len(g))]
+            i += len(g)
+            if all(d == "apply" for d in ds) and not self.violations(g[0].id):
+                out += [r for r in [self.confirm(g[0].id, source="escalation")] if r]
+            elif any(d == "reject" for d in ds):
+                self.reject(g[0].id, source="escalation")
+        return out
+
+    def _agree(self, props, o, spec, text):
+        """Apply a pending proposal from this message that the verdict confirms (see _verdict)."""
+        ctx = f'{o.get("quote") or ""} {_sentence_for(text, o["value"])}'
+        for p in props:
+            md = p.metadata or {}
+            if (md.get("pending") and p.raw == text and md.get("why") == "hedged wording"
+                    and not md.get("group") and self._mode(spec) == "auto" and not _hedged(ctx)
+                    and not self.violations(p.id)):
+                done = self._confirm_one(p, "verdict", False)
+                p.metadata = {**p.metadata, "auto_applied": True}
+                return [done]
+        return []
+
+    # ── earned autonomy ──
+    def _mode(self, spec):
+        """The gate mode in force: an "earned" slot is "auto" while its evidence holds, else "shadow"."""
+        mode = _gate_mode(spec)
+        if mode != "earned":
+            return mode
+        n, errors = self.autonomy(spec.name)
+        return "auto" if n >= _EARN_MIN and errors <= _EARN_MAX_RATE * n else "shadow"
+
+    def autonomy(self, slot, extractor=None):
+        """(decided samples, errors) for `slot` under `extractor` (default: the current one). A sample
+        is an auto-applied write (an error if it was later corrected) or a shadow proposal a person
+        decided (an error if rejected). ponytail: evidence is per memory space; a deployment with many
+        small spaces (one per patient) should pool it across spaces in the store."""
+        ext = extractor or extractor_id()
+        n = errors = 0
+        for s in self.statements:
+            md = s.metadata or {}
+            if md.get("extractor") != ext or SLOT_SCHEMA.canonical(s.subject) != slot:
+                continue
+            if md.get("auto_applied"):
+                n += 1
+                errors += bool(md.get("corrected"))
+            elif md.get("would_auto") and md.get("resolved") in ("confirmed", "rejected"):
+                n += 1
+                errors += md["resolved"] == "rejected"
+        return n, errors
+
+    def _attribute(self, later, text, edit=False):
+        """For each earlier auto-applied write that a write in `later` changes, decide whether the change
+        CORRECTS it (an error of the auto-apply) or is a legitimate later change, and record that on it."""
+        new = {s.id for s in later}
+        for w in later:
+            for a in self._auto_targets(w, new):
+                signal = self._correction(a, w, text, edit)
+                a.metadata = {**a.metadata, **({"corrected": signal, "corrected_by": w.id} if signal
+                                               else {"changed_by": w.id})}
+
+    def _auto_targets(self, w, exclude):
+        """Earlier auto-applied writes that `w` changes: one it replaces or removes, or an auto-removal
+        whose item `w` adds back."""
+        out = []
+        for a in self.statements:
+            md = a.metadata or {}
+            if a.id in exclude or not md.get("auto_applied") or "corrected" in md or "changed_by" in md:
+                continue
+            if w.supersedes == a.id:
+                out.append(a)
+            elif (a.status is Status.HISTORICAL and w.status is Status.ACTIVE and w.subject == a.subject
+                  and _list_identity(w.value) == _list_identity(self._item(a))):
+                out.append(a)
+        return out
+
+    def _correction(self, a, w, text, edit):
+        """The signal that `w` corrects the auto-applied `a`, or None if it is a legitimate change."""
+        if edit:
+            return "edit"
+        if _CORRECTION.search(str(text).lower()):
+            return "language"
+        if a.created_at is not None and time.time() - a.created_at > _CORRECTION_WINDOW:
+            return None                                # long after: the world changed, not the write
+        prior = next((x for x in self.statements if x.id == a.supersedes), None) if a.supersedes else None
+        if a.status is Status.HISTORICAL:              # a was a removal; w adds the item back
+            return "reversal"
+        if prior is None:                              # a added an item; w removes it again
+            return "reversal" if str(w.value).startswith("(retracted") or w.status is Status.HISTORICAL else None
+        return "reversal" if canon(w.value) == canon(prior.value) else None   # back to the exact prior value
+
+    def _item(self, s):
+        """The list item a statement is about: a removal's tombstone is about what it removed."""
+        if s.status is Status.HISTORICAL and s.supersedes and str(s.value).startswith("(retracted"):
+            t = next((x for x in self.statements if x.id == s.supersedes), None)
+            return t.value if t else s.value
+        return s.value
+
+    def _enforce_constraints(self, before, was):
+        """Judge everything this message changed TOGETHER against the declared constraints, on the
+        record as it now stands. If the message broke one (a switch applied without its stop: two
+        anticoagulants), every change it made inside that constraint's scope comes back off the
+        record and waits as ONE linked proposal, approved or rejected whole. Changes outside the
+        scope (a new statin in the same note) stand. Proposals from one message inside a scope are
+        linked even when nothing broke, so a reviewed switch can't be half-approved either."""
+        for c in getattr(SLOT_SCHEMA, "constraints", ()):
+            mine = [s for s in self.statements if s.id not in before and _in_scope(c, s.subject, self._item(s))]
+            if c in broken(was, _pairs(self.active())):
+                for s in mine:
+                    if (s.metadata or {}).get("auto_applied"):
+                        self._unapply(s, f"would break {c.name}")
+            linked = [s for s in mine if (s.metadata or {}).get("pending")]
+            if len(linked) > 1:
+                for s in linked:
+                    s.metadata = {**(s.metadata or {}), "group": linked[0].id}
+        # ponytail: linking every same-slot proposal from one message was tried and measured worse
+        # (a wrong proposal took correct ones down with it, 85 -> 72 of 108 under review); only
+        # declared constraints link proposals.
+
+    def _unapply(self, s, reason):
+        """Take an auto-applied change back off the record and make it a proposal instead.
+        ponytail: graph edges an auto-apply wrote stay until the next rebuild; a store with a graph
+        attached should re-project after a hold if it serves edges for gated slots."""
+        rival = next((x for x in self.statements if x.id == s.supersedes), None) if s.supersedes else None
+        if rival is not None and rival.status is Status.SUPERSEDED:
+            rival.status = Status.ACTIVE
+        if s.status is Status.HISTORICAL and rival is not None:   # an auto-applied removal, held as a proposed one
+            s.value, pending = rival.value, Action.RETRACT.value
+        else:
+            pending = Action.SUPERSEDE.value if rival is not None else "ADD"
+        s.status = Status.FLAGGED
+        s.metadata = {**(s.metadata or {}), "auto_applied": None, "pending": pending,
+                      "reason": reason, "why": reason}
 
     def _stop_sweep(self, text, source=""):
         """The last safety net for a gated list: if the sentence itself says to stop a current item
@@ -750,16 +1457,20 @@ class LLMMemory:
         warfarin to apixaban") and no extracted fact proposed that, propose the removal now. The
         model sometimes files the stop under an invented subject or archives the drug's own value as
         history, and then the stop is simply lost. Only ever adds a proposal for a person to decide."""
-        if (not SLOT_SCHEMA or str(source or "").lower() in _TRUSTED_SOURCES
-                or has(text, HYPOTHETICAL_MARKERS) or has(text, SARCASM_MARKERS)
-                or _NEGATED.search(str(text).lower())):
+        if not SLOT_SCHEMA or str(source or "").lower() in _TRUSTED_SOURCES:
             return []
-        proposed = {p.supersedes for p in self.pending()}
+        proposed = {p.supersedes: p for p in self.pending()}
         out = []
         for s in list(self.active()):
             spec = SLOT_SCHEMA.resolve(s.subject)
-            if (spec is None or not (spec.confirm and spec.multi) or s.id in proposed
-                    or not _stop_named(text, _list_identity(s.value))):
+            if (spec is None or not (spec.confirm and spec.multi)
+                    or not _stop_named(text, _list_identity(s.value))
+                    or _hedged(text)):   # a hedge anywhere: per sentence it asked 9 times, 0 right
+                continue
+            if s.id in proposed:   # an earlier proposal (a hold, left undecided) is decided on this stop
+                p = proposed[s.id]
+                if (p.metadata or {}).get("pending") == Action.RETRACT.value:
+                    p.metadata = {**p.metadata, "again": text}
                 continue
             pend = self._mk(f"{s.subject}@{s.scope}", s.subject, s.value, s.scope, status=Status.FLAGGED,
                             confidence=0.9, raw=text, source=source, supersedes=s.id)
@@ -772,11 +1483,12 @@ class LLMMemory:
         """An explicit 'forget X' must RETRACT — retire the fact — rather than depend on the
         extractor's own action guess (which might come back ADD/SUPERSEDE). We reuse the extractor
         only to resolve WHICH fact is meant, then force removal at high confidence."""
-        out = []
+        out, before = [], {s.id for s in self.statements}
         for o in llm_extract_classify(text, retrieval.embed_retrieve(text, self.active(), k=_RECONCILE_CONTEXT)):
             o["action"] = "RETRACT"
             o["confidence"] = max(float(o.get("confidence") or 0), 0.9)
             out.append(self._apply(o, text, source))
+        self._attribute([s for s in self.statements if s.id not in before], text, edit=True)
         return out
 
     def get(self, mid):
@@ -794,7 +1506,10 @@ class LLMMemory:
         new = self._mk(old.slot, old.subject, new_value, old.scope,
                         confidence=old.confidence, supersedes=old.id, raw=f"(edit) {new_value}",
                         metadata=old.metadata, source=source or getattr(old, "source", ""))
+        if (old.metadata or {}).get("auto_applied"):
+            new.metadata = {k: v for k, v in old.metadata.items() if k not in ("auto_applied", "extractor")}
         self.statements.append(new)
+        self._attribute([new], new.raw, edit=True)
         return new
 
     def history(self, subject):
@@ -807,6 +1522,7 @@ class LLMMemory:
         # (a guessed action, a rerouted subject, a future-tense order, hedging, negation, low
         # confidence) still goes to the approval queue.
         uncertain = not exact
+        why_unsure = ""   # which of the reasons below set `uncertain`, shown to the reviewer
         auto_applied = False
         # coerce: the LLM occasionally emits null / list / number for a field
         subj = str(o.get("subject") or "unknown")
@@ -819,19 +1535,31 @@ class LLMMemory:
         # statement about the same thing reconciles against this one instead of opening a second
         # slot beside it. Undeclared subjects pass through untouched.
         spec = SLOT_SCHEMA.resolve(subj) if SLOT_SCHEMA else None
+        qualified = False
+        if spec is None and SLOT_SCHEMA:
+            spec = SLOT_SCHEMA.resolve_qualified(subj)
+            if spec is not None and str(source or "").lower() not in _TRUSTED_SOURCES:
+                # "spouse_risk_tolerance", "payment_plan": a gated slot reached through a free name. As
+                # proposals these were right 2 times in 41 (mostly someone else's fact), so each cost a
+                # person a "no". It stays a note under its own name that expires, outside the slot.
+                act, spec = Action.FLAG, None
+            qualified = uncertain = spec is not None
         if spec is not None:
             subj = spec.name
         is_multi = spec is not None and spec.multi   # slot holds a LIST (allergies, med list)
+        untrusted = spec is not None and str(source or "").lower() in _PROPOSE_ONLY
         target = next((s for s in self.active() if s.id == o.get("target_id")), None)
+        # Hedges, sarcasm and negation are judged on the sentence the fact comes from, not the whole note.
+        ctx = _sentence_for(text, val, target.value if target is not None else "")
         if target is not None and target.subject != subj and act in (Action.SUPERSEDE, Action.REFINE, Action.RETRACT):
             # The model pointed at a fact but named a different subject ("metformin_therapy_status"
             # targeting metformin's row). The change lands on the target, so the target's slot rules
             # apply: otherwise a gated medication is edited or retired through an ungated name.
             tspec = SLOT_SCHEMA.resolve(target.subject) if SLOT_SCHEMA else None
-            if tspec is not None and tspec.confirm:
+            if tspec is not None and (tspec.confirm or tspec.confirm_mode == "removal"):
                 spec, subj = tspec, tspec.name
                 is_multi = tspec.multi
-                uncertain = True
+                uncertain, why_unsure = True, "named another slot"
         # ── STOP ON A GATED LIST ──
         # "Warfarin stopped today" / "D/C warfarin" / a whole "Stop the warfarin." often comes back as
         # an ADD or an ARCHIVE (the model filing it as history) whose VALUE names an active list item
@@ -843,8 +1571,8 @@ class LLMMemory:
         # have it turned into an ADD (events never retract) and archived.
         if (spec is not None and spec.confirm and is_multi
                 and act in (Action.ADD, Action.COEXIST, Action.REFINE, Action.ARCHIVE, Action.RETRACT)
-                and _STOP_WORDS.search(val.lower()) and not _NEGATED.search(f"{text} {val}".lower())
-                and not has(text, HYPOTHETICAL_MARKERS) and not has(text, SARCASM_MARKERS)):
+                and _STOP_WORDS.search(val.lower()) and not _NEGATED.search(f"{ctx} {val}".lower())
+                and not has(ctx, HYPOTHETICAL_MARKERS) and not has(ctx, SARCASM_MARKERS)):
             named = [s for s in self.active() if s.subject == subj and _names_item(val, s.value)]
             if len(named) == 1:
                 act, target, is_event = Action.RETRACT, named[0], False
@@ -858,6 +1586,16 @@ class LLMMemory:
         if (spec is not None and spec.confirm and is_multi and act == Action.RETRACT
                 and target is not None and target.subject == subj):
             is_event = False   # the model named the item it removes; an "event" tag can't undo that
+        # ── AN ITEM THAT ENDED ──
+        # "Ticket 4411 resolved", "sold the VTI position" came back as history (time_ref past, or an
+        # ARCHIVE/event) and the item stayed current. On a declared list, a value that names exactly one
+        # current item, said with ending language in its own sentence, removes that item.
+        if (spec is not None and is_multi and act != Action.RETRACT
+                and (time_ref == "past" or act == Action.ARCHIVE or is_event)
+                and _ENDED.search(f"{val} {ctx}".lower()) and not _hedged(ctx)):
+            named = [s for s in self.active() if s.subject == subj and _mentions(val, s.value)]
+            if len(named) == 1:
+                act, target, is_event, time_ref = Action.RETRACT, named[0], False, "present"
 
         if is_event:
             # An event never replaces anything: it is a new thing that happened, not a correction.
@@ -885,7 +1623,8 @@ class LLMMemory:
                            status=Status.HISTORICAL, confidence=conf, raw=text, source=source)
             self.statements.append(st)
             return Action.ARCHIVE, subj, val
-        if time_ref == "future" and act in (Action.SUPERSEDE, Action.COEXIST, Action.ADD):
+        if (time_ref == "future" and act in (Action.SUPERSEDE, Action.COEXIST, Action.ADD)
+                and not getattr(spec, "future", False)):   # a goal is about the future by nature
             # "Increase metformin to 1000 mg" / "Start apixaban" read as future. On a gated slot that is
             # an order, so it goes to the approval queue below instead of a flag outside it, as long
             # as the gate will catch it (an ADD to an empty gated slot would otherwise apply now).
@@ -893,7 +1632,7 @@ class LLMMemory:
                      and (act == Action.SUPERSEDE or any(s.subject == subj for s in self.active())))
             if not gated:
                 act = Action.FLAG   # pending — surface it, don't assert it as current
-            uncertain = True        # an order for later: a person decides when it takes effect
+            uncertain, why_unsure = True, "future order"   # a person decides when it takes effect
 
         # ── DETERMINISTIC RETRACT UPGRADE ──
         # A removal the extractor mislabelled ("ServiceA no longer calls ServiceB" coming back as
@@ -905,8 +1644,8 @@ class LLMMemory:
         # is why a hesitant "considering dropping X" can never delete a still-true fact.
         if (not is_event
                 and act in (Action.ADD, Action.SUPERSEDE, Action.COEXIST, Action.REFINE)
-                and has(text, RETRACT_MARKERS)
-                and not has(text, HYPOTHETICAL_MARKERS) and not has(text, SARCASM_MARKERS)
+                and has(ctx, RETRACT_MARKERS)
+                and not has(ctx, HYPOTHETICAL_MARKERS) and not has(ctx, SARCASM_MARKERS)
                 and any(s.subject == subj
                         and (canon(s.value) == canon(val)
                              or (val == "(unspecified)" and not is_multi))
@@ -956,13 +1695,13 @@ class LLMMemory:
         # none of these is a change to a gated list, in either mode. Skipping keeps the drug as it is.
         if (spec is not None and spec.confirm and is_multi and str(source or "").lower() not in _TRUSTED_SOURCES
                 and act in (Action.ADD, Action.COEXIST, Action.SUPERSEDE, Action.REFINE, Action.RETRACT)):
-            if act != Action.RETRACT and _NO_CHANGE.search(val.lower()):
+            if act != Action.RETRACT and getattr(spec, "holds", True) and _NO_CHANGE.search(val.lower()):
                 return Action.SKIP, subj, val
-            if _NEGATED.search(text.lower()):
+            if _NEGATED.search(ctx.lower()):
                 return Action.SKIP, subj, val
             if act == Action.RETRACT:
                 kept = target or _slot_target(self.active(), subj, val, is_multi)
-                if kept is not None and _kept(text, _list_identity(kept.value)):
+                if kept is not None and _kept(self._fresh(text), _list_identity(kept.value)):
                     return Action.SKIP, subj, val
         # A restatement with a note ("metformin 500 mg twice daily (restarted)") is not a change.
         if (spec is not None and spec.confirm and act in (Action.ADD, Action.SUPERSEDE, Action.REFINE)
@@ -970,24 +1709,89 @@ class LLMMemory:
                         for s in self.active())):
             return Action.DEDUP, subj, val
 
+        # ── A MODEL FLAG ON A DECLARED SLOT ──
+        # It stays a plain FLAG that expires (below), never a proposal: as proposals, Haiku's flags on
+        # gated slots were right 1 time in 51 on the hard episodes, so each one cost a person a "no".
+        if act == Action.FLAG and spec is not None:
+            ftgt = target or _slot_target(self.active(), subj, val, is_multi)
+            if ftgt is not None and canon(ftgt.value) == canon(val):
+                return Action.DEDUP, subj, val
+
         # An ADD to a gated slot that already holds a value is a change too: on a list it adds a drug
         # (and, beside a pending stop, can leave two anticoagulants active); on a single slot the
         # same-slot invariant below would quietly supersede the current value. Only the first write
         # to an empty gated slot goes through unreviewed (there is nothing to lose yet).
         gate_add = (act in (Action.ADD, Action.COEXIST)
-                    and any(s.subject == subj for s in self.active()))
-        if (spec is not None and spec.confirm
-                and (act in (Action.SUPERSEDE, Action.RETRACT, Action.REFINE) or gate_add)
+                    and (qualified or any(s.subject == subj for s in self.active())))
+        removal_gate = (spec is not None and spec.confirm_mode == "removal"
+                        and (act in (Action.SUPERSEDE, Action.RETRACT, Action.REFINE)
+                             or (qualified and act in (Action.ADD, Action.COEXIST))))
+        if (spec is not None and ((spec.confirm and (act in (Action.SUPERSEDE, Action.RETRACT, Action.REFINE)
+                                                     or gate_add)) or removal_gate
+                                       or (untrusted and act not in (Action.FLAG, Action.SKIP, Action.DEDUP)))
                 and str(source or "").lower() not in _TRUSTED_SOURCES):
             tgt = target or _slot_target(self.active(), subj, val, is_multi)
             # a list item that names no current entry is a NEW item, even when the model called it a
             # replacement; otherwise a SUPERSEDE with no identifiable target skipped the gate entirely
-            new_item = tgt is None and is_multi and act in (Action.ADD, Action.COEXIST, Action.SUPERSEDE, Action.REFINE)
+            new_item = (tgt is None and (is_multi or qualified or untrusted)
+                        and act in (Action.ADD, Action.COEXIST, Action.SUPERSEDE, Action.REFINE))
             if gate_add and tgt is not None:
                 act = Action.SUPERSEDE   # names an existing item (a dose change) or a single slot's value
-            uncertain = (uncertain or conf < AUTO_THRESHOLD or has(text, HYPOTHETICAL_MARKERS)
-                         or has(text, SARCASM_MARKERS) or _NEGATED.search(text.lower()) is not None)
-            if _gate_mode(spec) == "auto" and not uncertain and (tgt is not None or new_item):
+            # Auto-apply is judged on the WHOLE message, deliberately: scoping hedges to one sentence let
+            # Haiku's misreadings in plain sentences apply by themselves (a 5-day antibiotic added as a
+            # chronic medication, "rapid AF" overwriting the diagnosis). Proposals and skips use the
+            # sentence, where the worst case is one more question for a person.
+            # A verdict op is judged on the words it quotes plus its own sentence, not the whole message:
+            # whole-message hedging asked 27 more questions with the verdict on, 11 of them needless.
+            hedge_ctx = (f'{o.get("quote") or ""} {_sentence_for(text, val)}' if o.get("reason") == "verdict" else text)
+            # A stop or replacement of an item on the record is judged on its LATEST mention when that
+            # mention says plainly it happened: a hedge in older, copied-forward text no longer holds it
+            # back. New items keep the whole message (the misreadings above were new items).
+            if (hedge_ctx is text and tgt is not None and act in (Action.SUPERSEDE, Action.RETRACT, Action.REFINE)
+                    and _latest_done(text, tgt.value) is not None):
+                hedge_ctx = _latest_done(text, tgt.value)
+            carried: set = getattr(self, "_old_sents", set())
+            if carried:
+                evidence = _naming(text, [val, tgt.value if tgt is not None else ""])
+                if evidence and all(_norm_utterance(x) in carried for x in evidence) and any(
+                        (x.metadata or {}).get("resolved") == "rejected" and x.subject == subj
+                        and x.supersedes == (tgt.id if tgt is not None else None)
+                        and (canon(x.value) == canon(val) or _list_identity(x.value) == _list_identity(val))
+                        for x in self.statements):
+                    return Action.SKIP, subj, val   # copied-forward text a person already said no to
+                if hedge_ctx is text:
+                    hedge_ctx = self._fresh(text)   # a hedge in copied-forward text was judged when first seen
+            unsure = ("unclear action" if not exact
+                      else (why_unsure or "unsure") if uncertain else "low confidence" if conf < AUTO_THRESHOLD
+                      else "hedged wording" if _hedged(hedge_ctx) else "")
+            # A refinement adds detail to what it refines. One that no longer names the old value
+            # ("atrial fibrillation" refined to "rapid AF") replaces it, and is a reading to check.
+            if not unsure and act is Action.REFINE and tgt is not None and not _mentions(val, tgt.value):
+                unsure = "refinement drops the old value"
+            # "phone support removed; retired for Pro" filed as a NEW entitlement would put it back.
+            if not unsure and new_item and _ENDED.search(str(val).lower()):
+                unsure = "new item says it ended"
+            # A refinement that loses the old dose or number ("lisinopril 20 mg" -> "lisinopril") replaces it.
+            # (Measured: holds for future/temporary wording, numbers absent from the message and re-adds were
+            # right 41/46, 31/42 and 14/14 times, so those are not rules.)
+            if not unsure and act is Action.REFINE and tgt is not None and _numbers(tgt.value) - _numbers(val):
+                unsure = "refinement drops the old numbers"
+            if untrusted:
+                unsure = "pasted or retrieved text"
+            uncertain = uncertain or bool(unsure)
+            # A removal from a list applies by itself only when the message NAMES the item it removes:
+            # "threw the old pressure pill away" named neither drug, and the model picked metformin.
+            # A paused or suspended item is not removed either ("API access suspended until Friday").
+            if (tgt is not None and is_multi and act == Action.RETRACT
+                    and (not _names_item(text, tgt.value) or _paused(self._fresh(text), _list_identity(tgt.value)))):
+                uncertain, unsure = True, unsure or "removal not named"
+            mode = self._mode(spec)
+            shadow = ({"would_auto": True} if mode == "shadow" and not uncertain and (tgt is not None or new_item)
+                      else {})
+            why = {"why": unsure or f"{mode} slot"}   # shown to the reviewer
+            if removal_gate and new_item and not qualified and not untrusted:
+                act = Action.ADD   # names no current entry, so nothing is lost: it applies at once
+            elif mode == "auto" and not uncertain and (tgt is not None or new_item):
                 # A clear change on an "auto" slot applies now, below, and is marked auto-applied.
                 target, auto_applied = tgt, True
                 if new_item:
@@ -999,7 +1803,7 @@ class LLMMemory:
                     return Action.DEDUP, subj, val
                 pend = self._mk(f"{subj}@{scope}", subj, val, scope,
                                 status=Status.FLAGGED, confidence=conf, raw=text, source=source)
-                pend.metadata = {"pending": "ADD", "category": spec.category or ""}
+                pend.metadata = {"pending": "ADD", "category": spec.category or "", **why, **shadow}
                 self.statements.append(pend)
                 return Action.FLAG, subj, val
             elif tgt is not None:
@@ -1011,11 +1815,12 @@ class LLMMemory:
                             if x.supersedes == tgt.id and (x.metadata or {}).get("pending") == act.value
                             and (act == Action.RETRACT or canon(x.value) == canon(val))), None)
                 if dup is not None:
+                    dup.metadata = {**(dup.metadata or {}), "again": text}   # said again: decide it on this message
                     return Action.DEDUP, subj, val
                 pend = self._mk(f"{subj}@{scope}", subj, val, scope,
                                  status=Status.FLAGGED, confidence=conf, raw=text, source=source,
                                  supersedes=tgt.id)
-                pend.metadata = {"pending": act.value, "category": spec.category or ""}
+                pend.metadata = {"pending": act.value, "category": spec.category or "", **why, **shadow}
                 self.statements.append(pend)
                 return Action.FLAG, subj, val
 
@@ -1055,9 +1860,16 @@ class LLMMemory:
                                status=Status.FLAGGED, confidence=conf, raw=text, source=source)
                 self.statements.append(st)
                 return Action.FLAG, subj, val
+            # A refinement is still a change, so the old wording is kept as a retired row ("history is
+            # kept"). The fact keeps its id with the new wording, so anything that refers to it by id
+            # (a pending proposal, an agent, a later extraction) still points at the current fact.
+            old = self._mk(target.slot, target.subject, target.value, target.scope, status=Status.SUPERSEDED,
+                           confidence=target.confidence, raw=target.raw, source=getattr(target, "source", ""),
+                           metadata={"refined_into": target.id})
+            self.statements.append(old)
             target.value = val; target._emb = None   # value changed -> re-embed on save
-            if auto_applied:
-                target.metadata = {**(target.metadata or {}), "auto_applied": True}
+            target.metadata = {**(target.metadata or {}), "refined_from": old.id,
+                               **({"auto_applied": True} if auto_applied else {})}
             self._gwrite(o, Action.REFINE); return act, subj, val
         st = self._mk(f"{subj}@{scope}", subj, val, scope, confidence=conf, raw=text, source=source)
         if is_event:
@@ -1079,6 +1891,7 @@ class LLMMemory:
         st.tail = str(o.get("tail") or o.get("value") or "")
         if act == Action.FLAG:
             st.status = Status.FLAGGED
+            st.metadata = {**(st.metadata or {}), "expires": time.time() + _FLAG_TTL}
         else:
             # SAME-SLOT INVARIANT: at most one ACTIVE value per (subject, scope). Resolve against the
             # LLM-named target when it gave one; otherwise — the deterministic guard — against any
@@ -1217,36 +2030,67 @@ class LLMMemory:
         return [s for s in self.statements
                 if s.status is Status.FLAGGED and (s.metadata or {}).get("pending")]
 
-    def confirm(self, mid, source=""):
-        """Apply a pending change. Returns (Action, subject, value), or None if `mid` isn't pending.
-
-        Only now does the proposed write actually happen — the whole point of the gate is that
-        nothing was applied when the sentence was read.
-        """
+    def group(self, mid):
+        """The pending proposals decided together with `mid`: its linked group, or just itself."""
         st = next((s for s in self.pending() if s.id == mid), None)
         if st is None:
-            return None
-        proposed = (st.metadata or {}).get("pending")
-        if proposed == "ADD":
-            # A new list item: nothing is replaced. If the same value became active meanwhile, adding
-            # it again would duplicate it, so the proposal is stale instead.
-            if any(s.subject == st.subject and canon(s.value) == canon(st.value) for s in self.active()):
-                st.metadata = {**(st.metadata or {}), "pending": None, "resolved": "stale"}
-                return None
-            st.status = Status.ACTIVE
-            st.metadata = {**(st.metadata or {}), "pending": None,
-                           "resolved": "confirmed", "confirmed_by": source or "unknown"}
-            return Action.ADD, st.subject, st.value
-        target = next((s for s in self.statements if s.id == st.supersedes), None)
-        if target is None or target.status is not Status.ACTIVE:
-            # The value it was going to replace is already gone; applying now would resurrect a
-            # decision made against state that no longer holds.
-            st.metadata = {**(st.metadata or {}), "pending": None, "resolved": "stale"}
-            return None
+            return []
+        g = (st.metadata or {}).get("group")
+        return [s for s in self.pending() if g and (s.metadata or {}).get("group") == g] or [st]
 
+    def _after(self, members):
+        """The active facts as they would be with `members` applied."""
+        gone = {s.supersedes for s in members if s.supersedes}
+        return ([s for s in self.active() if s.id not in gone]
+                + [s for s in members if (s.metadata or {}).get("pending") != Action.RETRACT.value])
+
+    def violations(self, mid):
+        """Constraints approving `mid` (with its group) would break against the record as it is now."""
+        return broken(_pairs(self.active()), _pairs(self._after(self.group(mid))))
+
+    def _stale(self, st):
+        """A proposal made against state that no longer holds: the item it adds is already there, or
+        the value it replaces is already gone. Applying it would resurrect an outdated decision."""
+        if (st.metadata or {}).get("pending") == "ADD":
+            return any(s.subject == st.subject and canon(s.value) == canon(st.value) for s in self.active())
+        target = next((s for s in self.statements if s.id == st.supersedes), None)
+        return target is None or target.status is not Status.ACTIVE
+
+    def confirm(self, mid, source="", override=False):
+        """Apply a pending change and every change linked to it, as one decision. Returns
+        (Action, subject, value) for `mid`, or None if it isn't pending or the group went stale.
+
+        Only now does the proposed write actually happen — the whole point of the gate is that
+        nothing was applied when the sentence was read. The declared constraints are checked again
+        against the record as it is NOW (something may have changed while the proposal waited);
+        a break raises ConstraintViolation unless `override` says a person intends it.
+        """
+        members = self.group(mid)
+        if not members:
+            return None
+        if any(self._stale(s) for s in members):
+            for s in members:                          # whole or not at all, stale included
+                s.metadata = {**(s.metadata or {}), "pending": None, "resolved": "stale"}
+            return None
+        bad = self.violations(mid)
+        if bad and not override:
+            items = sorted({_list_identity(v) for c in bad for subj, v in _pairs(self._after(members))
+                            if _in_scope(c, subj, v)})
+            raise ConstraintViolation(f"approving would break {', '.join(c.name for c in bad)}: "
+                                      f"{', '.join(items)} would all be current")
+        done = {s.id: self._confirm_one(s, source, bool(bad)) for s in members}
+        self._attribute(members, members[0].raw)
+        return done[mid]
+
+    def _confirm_one(self, st, source, overridden):
+        proposed = (st.metadata or {}).get("pending")
+        st.metadata = {**(st.metadata or {}), "pending": None, "resolved": "confirmed",
+                       "confirmed_by": source or "unknown", **({"override": True} if overridden else {})}
+        if proposed == "ADD":                          # a new list item: nothing is replaced
+            st.status = Status.ACTIVE
+            return Action.ADD, st.subject, st.value
+        target = next(s for s in self.statements if s.id == st.supersedes)
         target.status = Status.SUPERSEDED
-        st.metadata = {**(st.metadata or {}), "pending": None,
-                       "resolved": "confirmed", "confirmed_by": source or "unknown"}
         self._gretire(target.subject)
         if proposed == Action.RETRACT.value:
             st.status = Status.HISTORICAL
@@ -1257,13 +2101,16 @@ class LLMMemory:
 
     def reject(self, mid, source=""):
         """Discard a pending change. The current value stands and the proposal is kept as history —
-        that someone proposed stopping a medication is itself worth being able to audit."""
-        st = next((s for s in self.pending() if s.id == mid), None)
-        if st is None:
+        that someone proposed stopping a medication is itself worth being able to audit. A linked
+        proposal is rejected with its whole group."""
+        members = self.group(mid)
+        if not members:
             return None
-        st.status = Status.HISTORICAL
-        st.metadata = {**(st.metadata or {}), "pending": None,
-                       "resolved": "rejected", "rejected_by": source or "unknown"}
+        for st in members:
+            st.status = Status.HISTORICAL
+            st.metadata = {**(st.metadata or {}), "pending": None,
+                           "resolved": "rejected", "rejected_by": source or "unknown"}
+        st = next(s for s in members if s.id == mid)
         return Action.SKIP, st.subject, st.value
 
     def _history(self):
@@ -1294,8 +2141,11 @@ class LLMMemory:
         from vayl.security.safety import SafetyPolicy, evaluate_fact
         policy = policy or SafetyPolicy()
         now = now if now is not None else time.time()
+        # A plain FLAG nobody resolved stops blocking once it expires; a pending proposal never expires.
         facts = [s for s in self.statements
-                 if s.subject == subject and s.status in (Status.ACTIVE, Status.FLAGGED)]
+                 if s.subject == subject and (s.status is Status.ACTIVE or (
+                     s.status is Status.FLAGGED and ((s.metadata or {}).get("pending")
+                                                     or (s.metadata or {}).get("expires", now + 1) > now)))]
         if not facts:
             return {"ok": False, "subject": subject,
                     "reasons": ["no active fact for this subject — nothing safe to act on"], "facts": []}

@@ -309,16 +309,21 @@ def remember(text: str, user_id: str = "default", agent_id: str = "", run_id: st
         _metrics.record_actions([a.value for a, _s, _v in results])
         _audit.record("remember", user_id, agent_id, run_id,
                       (f"[{source}] " if source else "")
-                      + ("; ".join(f"{a.value} {s}" for a, s, v in results) or "no durable fact"))
+                      + ("; ".join(f"{a.value} {s}={v}" for a, s, v in results) or "no durable fact"))
         # SKIP is the engine declining to record something (a hypothetical, sarcasm, a removal with
         # nothing to remove) — reporting it under "Stored:" told the caller the opposite.
-        stored = [(a, s, v) for a, s, v in results if a.value != "SKIP"]
+        # A FLAG took no effect, so "Stored:" would tell an agent the new value is current.
+        stored = [(a, s, v) for a, s, v in results if a.value not in ("SKIP", "FLAG")]
+        flagged = [(a, s, v) for a, s, v in results if a.value == "FLAG"]
         skipped = [(s, v) for a, s, v in results if a.value == "SKIP"]
-        if not stored and not skipped:
+        if not stored and not skipped and not flagged:
             return "No durable fact found (looked like chatter or a question)."
         out = []
         if stored:
             out.append("Stored: " + "; ".join(f"[{a.value}] {s} = {v}" for a, s, v in stored))
+        if flagged:
+            out.append("Not applied, flagged for review: "
+                       + "; ".join(f"[{a.value}] {s} = {v}" for a, s, v in flagged))
         if skipped:
             out.append("Not stored (hypothetical, sarcasm, or nothing to change): "
                        + "; ".join(f"{s} = {v}" for s, v in skipped))
@@ -757,11 +762,14 @@ def pending_changes(user_id: str = "default", agent_id: str = "", run_id: str = 
             change = (f"REMOVE {s.subject}: {cur!r}" if proposed == "RETRACT"   # no new value to show
                       else f"ADD {s.subject}: {s.value!r}" if proposed == "ADD"     # nothing replaced
                       else f"REPLACE {s.subject}: {cur!r} -> {s.value!r}")
-            dup = llm_memory.duplicate_anticoagulant(m, s)
+            group = [p.id for p in m.group(s.id)]
+            bad = m.violations(s.id)
             lines.append(f"  #{s.id} {change}"
+                         + (f"   [linked: #{', #'.join(map(str, group))} are approved or rejected together]"
+                            if len(group) > 1 else "")
                          + (f"\n        said: {s.raw[:120]!r}" if s.raw else "")
-                         + (f"\n        ⚠ approving this leaves two anticoagulants active: {', '.join(map(repr, dup))}"
-                            " is current and not proposed for removal" if dup else ""))
+                         + (f"\n        ⚠ approving now would break {', '.join(c.name for c in bad)}"
+                            if bad else ""))
         return (f"{len(rows)} change(s) awaiting approval:\n" + "\n".join(lines)
                 + "\n\nApprove with confirm_change(memory_id), discard with reject_change(memory_id).")
     return _guard("pending_changes", go, cap=C.READ, space=user_id)
@@ -788,17 +796,22 @@ def _approver(note=""):
 
 @mcp.tool(annotations=_write("Approve a pending change", open_world=False))
 def confirm_change(memory_id: int, user_id: str = "default", agent_id: str = "", run_id: str = "",
-                   decided_by: str = "") -> str:
-    """Approve a proposed change to a confirm-required slot, applying it. Needs the `approve`
-    capability (admin and member roles; agents lack it, so an agent can't approve its own proposal).
-    The approver recorded is the authenticated caller; `decided_by` is an optional note."""
+                   decided_by: str = "", override: bool = False) -> str:
+    """Approve a proposed change to a confirm-required slot, applying it together with any changes
+    linked to it. Needs the `approve` capability (admin and member roles; agents lack it, so an agent
+    can't approve its own proposal). The approver recorded is the authenticated caller; `decided_by`
+    is an optional note. If approving would break a declared constraint (e.g. two anticoagulants
+    current) it is refused; pass override=true when the overlap is intended, such as bridging."""
     def go():
         who = _approver(decided_by)
         with _store.db.space_lock(_space_key(user_id, agent_id, run_id)):
             m = _store.load(user_id, agent_id, run_id)
-            proposal = next((p for p in m.pending() if p.id == memory_id), None)
-            dup = llm_memory.duplicate_anticoagulant(m, proposal) if proposal is not None else []
-            res = m.confirm(memory_id, source=who)
+            linked = [p.id for p in m.group(memory_id)]
+            try:
+                res = m.confirm(memory_id, source=who, override=override)
+            except llm_memory.ConstraintViolation as e:
+                return (f"Not approved: {e}. Nothing was changed. If this is intended, approve again "
+                        "with override=true; otherwise propose the missing removal first.")
             if res is None:
                 return (f"#{memory_id} is not awaiting approval. It may have been decided already, "
                         f"or the value it would have replaced has since changed — in which case the "
@@ -806,11 +819,10 @@ def confirm_change(memory_id: int, user_id: str = "default", agent_id: str = "",
             _store.save(user_id, m, agent_id, run_id)
             action, subject, value = res
             _audit.record("confirm_change", user_id, agent_id, run_id,
-                          f"#{memory_id} {action.value} {subject} by {who}")
-        # A warning, not a block: overlapping anticoagulants can be intended, and a person decided.
-        warn = (f"\n⚠ {', '.join(map(repr, dup))} is still active: two anticoagulants are now current. "
-                "Remove it if this was a switch." if dup else "")
-        return f"Approved #{memory_id}: {action.value} {subject} = {value}{warn}"
+                          f"#{', #'.join(map(str, linked))} {action.value} {subject} by {who}"
+                          + (" (override)" if override else ""))
+        also = f" (with linked #{', #'.join(str(i) for i in linked if i != memory_id)})" if len(linked) > 1 else ""
+        return f"Approved #{memory_id}{also}: {action.value} {subject} = {value}"
     return _guard("confirm_change", go, cap=C.APPROVE, space=user_id)
 
 
@@ -825,13 +837,15 @@ def reject_change(memory_id: int, user_id: str = "default", agent_id: str = "", 
         who = _approver(decided_by)
         with _store.db.space_lock(_space_key(user_id, agent_id, run_id)):
             m = _store.load(user_id, agent_id, run_id)
+            linked = [p.id for p in m.group(memory_id)]
             res = m.reject(memory_id, source=who)
             if res is None:
                 return f"#{memory_id} is not awaiting approval."
             _store.save(user_id, m, agent_id, run_id)
             _audit.record("reject_change", user_id, agent_id, run_id,
-                          f"#{memory_id} rejected by {who}")
-        return f"Discarded #{memory_id}. The current value is unchanged."
+                          f"#{', #'.join(map(str, linked))} rejected by {who}")
+        also = f" and linked #{', #'.join(str(i) for i in linked if i != memory_id)}" if len(linked) > 1 else ""
+        return f"Discarded #{memory_id}{also}. The current values are unchanged."
     return _guard("reject_change", go, cap=C.APPROVE, space=user_id)
 
 

@@ -1190,11 +1190,15 @@ paths:
       - Safety and approval
       operationId: confirm_change
       summary: Approve a pending change
-      description: 'Approve a proposed change to a confirm-required slot, applying it. Needs the `approve`
+      description: 'Approve a proposed change to a confirm-required slot, applying it together with any changes
 
-        capability (admin and member roles; agents lack it, so an agent can''t approve its own proposal).
+        linked to it. Needs the `approve` capability (admin and member roles; agents lack it, so an agent
 
-        The approver recorded is the authenticated caller; `decided_by` is an optional note.
+        can''t approve its own proposal). The approver recorded is the authenticated caller; `decided_by`
+
+        is an optional note. If approving would break a declared constraint (e.g. two anticoagulants
+
+        current) it is refused; pass override=true when the overlap is intended, such as bridging.
 
 
         **Requires capability:** `approve`.
@@ -1226,6 +1230,9 @@ paths:
                 decided_by:
                   default: ''
                   type: string
+                override:
+                  default: false
+                  type: boolean
               required:
               - memory_id
               type: object

@@ -4,7 +4,7 @@ description: >-
   active value per fact, real removal, and a verifiable history.
 ---
 
-# Memory for AI agents that can't be wrong
+# Memory for AI agents that must not be silently wrong
 
 **Vayl is memory for agents where a stale answer has consequences.** It reconciles on write, so a changed or removed fact is retired instead of left to compete at retrieval time, and it records every change on a signed, hash-chained audit trail. Why appending memory fails is covered once, in [Why your agent's memory returns stale facts](why-your-agents-memory-returns-stale-facts.md). This page lists what Vayl guarantees and where the guarantees stop.
 

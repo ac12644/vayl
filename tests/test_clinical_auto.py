@@ -10,7 +10,9 @@ from vayl.memory.schema import load as load_schema
 
 @pytest.fixture(autouse=True)
 def _auto(monkeypatch):
-    monkeypatch.setattr(llm_memory, "SLOT_SCHEMA", load_schema("preset:clinical"))   # meds: "auto"
+    schema = load_schema("preset:clinical")
+    schema.resolve("active_medication").confirm_mode = "auto"
+    monkeypatch.setattr(llm_memory, "SLOT_SCHEMA", schema)
     monkeypatch.setattr(llm_memory, "_TRUSTED_SOURCES", ("fhir",))
     monkeypatch.setattr(llm_memory, "_CONFIRM_MODE", "")
 

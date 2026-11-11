@@ -384,15 +384,22 @@ def test_brand_names_match_the_generic_on_the_list(monkeypatch):
     assert _queued(m2) == [("RETRACT", "warfarin 5 mg daily")]
 
 
-def test_the_reviewer_is_warned_before_creating_two_anticoagulants():
-    from vayl.memory.llm_memory import duplicate_anticoagulant
+def test_approving_a_second_anticoagulant_is_refused_until_the_first_is_stopped():
+    """Re-checked at approval, against the record as it is then: the Eliquis start can't be approved
+    while warfarin is still current, but can once warfarin's stop has been approved."""
+    from vayl.memory.llm_memory import ConstraintViolation
     m = _chart()
     _narrative(m, "Now on Eliquis.", {"action": "ADD", "subject": "active_medication", "value": "Eliquis 5 mg BID"})
     (add,) = m.pending()
-    assert duplicate_anticoagulant(m, add) == ["warfarin 5 mg daily"]     # warfarin's stop wasn't captured
+    assert [c.name for c in m.violations(add.id)] == ["one_anticoagulant"]   # warfarin's stop wasn't captured
+    with pytest.raises(ConstraintViolation, match="apixaban, warfarin"):
+        m.confirm(add.id)
+    assert add in m.pending()                                              # refused, nothing changed
     _narrative(m, "Stop warfarin.", {"action": "RETRACT", "subject": "active_medication",
                                      "value": "warfarin 5 mg daily", "target_id": 1})
-    assert duplicate_anticoagulant(m, add) == []                          # now its removal is queued too
+    stop = next(p for p in m.pending() if p.supersedes == 1)
+    m.confirm(stop.id)
+    assert m.violations(add.id) == [] and m.confirm(add.id)[0] is Action.ADD
 
 
 def test_a_status_slug_is_never_proposed_as_a_medication(monkeypatch):

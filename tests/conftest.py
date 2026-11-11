@@ -27,3 +27,12 @@ def _no_model_network(monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", guarded)
     yield
     assert not attempts, f"test tried to reach a model endpoint {attempts}; stub the LLM/embedder"
+
+
+@pytest.fixture(autouse=True)
+def _no_verdict_call(monkeypatch):
+    """The verdict pass (on by default) is a second model call; tests that want it stub llm_verdict
+    and switch it back on themselves."""
+    from vayl.memory import llm_memory
+    monkeypatch.setattr(llm_memory, "_VERDICT", False)
+    monkeypatch.setattr(llm_memory, "_ESCALATE", "")   # the escalation check is a model call too

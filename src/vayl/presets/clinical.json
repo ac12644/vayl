@@ -1,5 +1,5 @@
 {
-  "_note": "Built-in clinical preset. Enable with VAYL_SLOT_SCHEMA=preset:clinical and VAYL_CRITICAL_CATEGORIES=critical so allergies/meds are always injected. Medications are confirm \"auto\": a clear start, stop, switch or dose change applies at once (marked auto-applied in history), and only an uncertain one (hedged, negated, future-tense, low confidence, or one that would leave two anticoagulants active) waits for approval. Code status is \"review\": every change waits for a clinician. Allergies are not gated: surfacing a new allergy is safety-positive and must be immediate. Set VAYL_CONFIRM_MODE=review to require approval for every medication change.",
+  "_note": "Built-in clinical preset. Enable with VAYL_SLOT_SCHEMA=preset:clinical and VAYL_CRITICAL_CATEGORIES=critical so allergies/meds are always injected. Medications and primary diagnosis are confirm \"auto\": a clear change applies at once (marked auto-applied in history), and only an uncertain one (hedged, negated, future-tense, low confidence, or one that would leave two anticoagulants active) waits for approval. Code status is \"review\": every change waits for a clinician. Allergies are \"removal\": a new allergy applies immediately, while removing or changing a recorded one waits for a clinician. Set VAYL_CONFIRM_MODE=review to require approval for every gated change.",
   "slots": [
     {
       "name": "allergy",
@@ -7,8 +7,13 @@
       "category": "critical",
       "verbatim": true,
       "multi": true,
-      "confirm": false,
-      "aliases": ["allergies", "patient_allergy", "drug_allergy", "known_allergies"]
+      "confirm": "removal",
+      "aliases": [
+        "allergies",
+        "patient_allergy",
+        "drug_allergy",
+        "known_allergies"
+      ]
     },
     {
       "name": "active_medication",
@@ -17,26 +22,58 @@
       "verbatim": true,
       "multi": true,
       "confirm": "auto",
-      "aliases": ["current_medication", "medication", "prescribed_medication", "meds"]
+      "aliases": [
+        "current_medication",
+        "medication",
+        "prescribed_medication",
+        "meds"
+      ]
     },
     {
       "name": "code_status",
       "description": "resuscitation preference — full code, DNR, DNI",
       "category": "critical",
       "confirm": true,
-      "aliases": ["resuscitation_status", "dnr_status"]
+      "aliases": [
+        "resuscitation_status",
+        "dnr_status"
+      ]
     },
     {
       "name": "primary_diagnosis",
       "description": "the principal condition currently being treated",
       "category": "critical",
       "verbatim": true,
-      "aliases": ["diagnosis", "working_diagnosis"]
+      "confirm": "auto",
+      "aliases": [
+        "diagnosis",
+        "working_diagnosis"
+      ]
     },
     {
       "name": "care_team_lead",
       "description": "the clinician responsible for this patient's care",
-      "aliases": ["attending", "attending_physician", "responsible_clinician"]
+      "aliases": [
+        "attending",
+        "attending_physician",
+        "responsible_clinician"
+      ]
+    }
+  ],
+  "constraints": [
+    {
+      "name": "one_anticoagulant",
+      "slot": "active_medication",
+      "at_most": 1,
+      "class": [
+        "warfarin",
+        "apixaban",
+        "rivaroxaban",
+        "dabigatran",
+        "edoxaban",
+        "enoxaparin",
+        "heparin"
+      ]
     }
   ]
 }

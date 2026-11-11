@@ -14,7 +14,7 @@ The reconciling memory layer for AI agents.
 
 <!-- mcp-name: io.github.ac12644/vayl -->
 
-When a fact changes, most agent memory keeps both versions and lets the model guess which is current. Vayl replaces the old value, keeps it in history, and can hold high-stakes changes until a person approves them. It runs locally on SQLite and works with any MCP client: Claude Code, Cursor, Claude Desktop, or your own agent.
+When a fact changes, most agent memory keeps both versions and lets the model guess which is current. Vayl replaces the old value, keeps it in history, and can hold high-stakes changes until a person approves them. It is built for agents where a wrong stored fact causes harm: a medication list, a portfolio, an account's status. It runs locally on SQLite and works with any MCP client: Claude Code, Cursor, Claude Desktop, or your own agent.
 
 <p align="center">
   <img src="assets/vayl-demo.gif" alt="A real run with a fictional patient: warfarin is recorded, then replaced by apixaban. With approval required (VAYL_CONFIRM_MODE=review), the change waits in pending_changes until a clinician confirms it. Recall then answers apixaban now, warfarin before, and refuses amoxicillin because of the recorded penicillin allergy." width="860">
@@ -26,8 +26,9 @@ When a fact changes, most agent memory keeps both versions and lets the model gu
 
 - **Reconciles changes.** A new value supersedes the old one, and "we stopped X" retracts X. A retired fact is never returned as current.
 - **Keeps history.** Ask what is true now or what was true before. Every change goes on a signed, tamper-evident audit chain.
-- **Automatic, with a person in the loop only when it matters.** On gated slots such as medications, a clear change applies by itself and an uncertain one (hedged, negated, or one that would leave two anticoagulants active) waits for approval; set `VAYL_CONFIRM_MODE=review` to approve every change. `check_before_act` blocks an action that depends on a disputed, stale or just-changed fact.
-- **Small and local.** SQLite by default, Postgres for teams. One model call to store a fact and one to answer. Any OpenAI-compatible model, Anthropic, Groq or a local Ollama model.
+- **Automatic, and careful about it.** On gated slots such as medications, a clear change applies by itself. An uncertain one (hedged, negated, or one that would leave two anticoagulants active) is checked by a second model that reads the message without seeing the proposed change, and it applies only if the two agree. Otherwise the old value stands and the change waits in `pending_changes`. Set `VAYL_CONFIRM_MODE=review` to have a person approve every change.
+- **Fails towards the old value.** Pasted or retrieved text can only propose a change to a declared slot, never apply one. If the checking model can't be reached, nothing is applied unchecked. `check_before_act` blocks an action that depends on a disputed, stale or just-changed fact.
+- **Small and local.** SQLite by default, Postgres for teams. One model call to store a fact and one to answer; with a preset, up to three calls to store (extract, verify, and the second-model check). Any OpenAI-compatible model, Anthropic, Groq or a local Ollama model.
 - **Built-in presets** for clinical, support, finance, sales, coding and assistant memory.
 
 ## Install
@@ -84,6 +85,7 @@ Examples for each are in [Agent frameworks](https://vayl.gitbook.io/vayl-docs/do
 | [How Vayl works](https://vayl.gitbook.io/vayl-docs/documentation/concepts/how-vayl-works) | Extraction, reconciliation and retrieval |
 | [Tutorial: a hospital medication assistant](https://vayl.gitbook.io/vayl-docs/documentation/guides/tutorial-a-hospital-medication-assistant) | Clinical preset, critical facts and approval |
 | [Tutorial: a customer-support assistant](https://vayl.gitbook.io/vayl-docs/documentation/guides/tutorial-a-customer-support-assistant) | Account state and safety checks |
+| [Safety gates and human approval](https://vayl.gitbook.io/vayl-docs/documentation/guides/safety-gates-and-human-approval) | What applies by itself, what waits, and how to approve |
 | [MCP tools](https://vayl.gitbook.io/vayl-docs/documentation/reference/mcp-tools) | All 30+ tools |
 | [Deploying vayl-server](https://vayl.gitbook.io/vayl-docs/documentation/guides/deploying-vayl-server) | Team server, auth, Docker, Postgres |
 | [Benchmarks](https://vayl.gitbook.io/vayl-docs/documentation/why-vayl/why-your-agents-memory-returns-stale-facts) | Stale-value and retraction results against Mem0 and Graphiti |
@@ -94,7 +96,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). The unit tests run offline, with no API 
 
 ## Security
 
-Data is encrypted at rest by default, and Vayl sends nothing anywhere except to the model endpoints you configure. Vayl is not certified for clinical use and has not been audited by a third party. Report vulnerabilities as described in [SECURITY.md](SECURITY.md).
+Data is encrypted at rest by default, and Vayl sends nothing anywhere except to the model endpoints you configure. When `ANTHROPIC_API_KEY` is set and a preset is in use, the second-model check is on by default and sends the message text to Anthropic; set `VAYL_ESCALATE_MODEL=off` to turn it off. Vayl is not certified for clinical use and has not been audited by a third party. Report vulnerabilities as described in [SECURITY.md](SECURITY.md).
 
 ## License
 

@@ -33,9 +33,9 @@ The return lists one `[ACTION] subject = value` entry per extracted fact. The ac
 | `ADD` | New subject, no conflict. | `Stored: [ADD] state = Redux` |
 | `SUPERSEDE` | Replaces the active value; the old one becomes `SUPERSEDED`. | `Stored: [SUPERSEDE] state = Zustand` |
 | `DEDUP` | Already known; nothing new written. | `Stored: [DEDUP] state = Zustand` |
-| `REFINE` | More detail on the same fact; updated in place. | `Stored: [REFINE] api_style = REST over HTTP/2 with JSON bodies` |
+| `REFINE` | More detail on the same fact; the earlier wording stays in history. | `Stored: [REFINE] api_style = REST over HTTP/2 with JSON bodies` |
 | `COEXIST` | Same subject, different **scope**; both stay active. | `Stored: [ADD] deploy_day = Tuesday; [COEXIST] deploy_day = Friday` |
-| `FLAG` | Surfaced, not applied: an ambiguous or low-confidence change, a future-tense statement, a cross-source conflict under `AUTHORITY`/`REVIEW`, or a change to a confirm-required slot. | `Stored: [FLAG] hosting = Fly.io` |
+| `FLAG` | Surfaced, not applied: an ambiguous or low-confidence change, a future-tense statement, a cross-source conflict under `AUTHORITY`/`REVIEW`, or a change to a confirm-required slot. | `Not applied, flagged for review: [FLAG] hosting = Fly.io` |
 | `ARCHIVE` | A past-tense statement; recorded as history, never active. | `Stored: [ARCHIVE] hosting = Heroku` |
 | `RETRACT` | A removal with no replacement. | `Stored: [RETRACT] primary_database = Postgres` |
 | `SKIP` | Not a durable fact (hypothetical, sarcasm). Nothing is stored, and it's reported on its own line. | `Not stored (hypothetical, sarcasm, or nothing to change): language = Rust` |

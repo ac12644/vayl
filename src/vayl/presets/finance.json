@@ -1,5 +1,5 @@
 {
-  "_note": "Built-in finance preset (advisory / wealth / brokerage assistants). Enable with VAYL_SLOT_SCHEMA=preset:finance and VAYL_CRITICAL_CATEGORIES=critical so KYC and risk tolerance are always surfaced. KYC and risk changes are confirm-gated — an LLM reading a chat line is not a client instruction to change them.",
+  "_note": "Built-in finance preset (advisory / wealth / brokerage assistants). Enable with VAYL_SLOT_SCHEMA=preset:finance and VAYL_CRITICAL_CATEGORIES=critical so KYC and risk tolerance are always surfaced. KYC and risk changes always wait for a person — an LLM reading a chat line is not a client instruction to change them. Holdings and account type are confirm \"auto\": a clear change applies at once, an uncertain one waits.",
   "slots": [
     {
       "name": "kyc_status",
@@ -20,17 +20,21 @@
       "description": "a security the client currently holds, with quantity (a portfolio is a list)",
       "verbatim": true,
       "multi": true,
+      "confirm": "auto",
+      "holds": false,
       "aliases": ["holding", "position", "portfolio_item"]
     },
     {
       "name": "financial_goal",
       "description": "a financial goal the client is working toward (a client may have several)",
       "multi": true,
-      "aliases": ["goal", "objective"]
+      "aliases": ["goal", "objective"],
+      "future": true
     },
     {
       "name": "account_type",
       "description": "the client's account type or tier",
+      "confirm": "auto",
       "aliases": ["account", "account_tier"]
     }
   ]
