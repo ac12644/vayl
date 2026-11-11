@@ -602,7 +602,7 @@ def _matcher(slot):
 def _same_value(a, b):
     """One value said again: equal, or one contains the other ("Full code" ~ "full code, confirmed")."""
     x, y = canon(a), canon(b)
-    return x == y or (bool(x) and bool(y) and (x in y or y in x))
+    return x == y or (bool(x) and bool(y) and (str(x) in str(y) or str(y) in str(x)))
 
 
 def _agrees(p, cur, values, multi, others=()):
@@ -694,7 +694,7 @@ def llm_escalate(text, proposals, current, owner="", source=""):
     return out
 
 
-_ESC_LOG = []   # every escalation decision, for harnesses and debugging
+_ESC_LOG: list[dict] = []   # every escalation decision, for harnesses and debugging
 
 
 # ── critical categories ──────────────────────────────────────────────────────
@@ -1250,7 +1250,7 @@ class LLMMemory:
 
     def _fresh(self, text):
         """`text` without the sentences earlier messages already carried (copied-forward history)."""
-        old = getattr(self, "_old_sents", set())
+        old: set = getattr(self, "_old_sents", set())
         fresh = [x for x in _SENT_SPLIT.split(text) if x.strip() and _norm_utterance(x) not in old]
         return " ".join(fresh) if fresh else text
 
@@ -1259,7 +1259,7 @@ class LLMMemory:
         applied by itself on gated slots the same way: one the independent reading does not agree with
         goes back to a proposal (the old value stands). Pasted or retrieved text only ever proposes (R19),
         so its proposals are left for a person."""
-        current = {}
+        current: dict[str, list] = {}
         for subj, val in was:
             current.setdefault(subj, []).append(val)
         auto = []
@@ -1443,7 +1443,7 @@ class LLMMemory:
         rival = next((x for x in self.statements if x.id == s.supersedes), None) if s.supersedes else None
         if rival is not None and rival.status is Status.SUPERSEDED:
             rival.status = Status.ACTIVE
-        if s.status is Status.HISTORICAL:              # an auto-applied removal, held as a proposed one
+        if s.status is Status.HISTORICAL and rival is not None:   # an auto-applied removal, held as a proposed one
             s.value, pending = rival.value, Action.RETRACT.value
         else:
             pending = Action.SUPERSEDE.value if rival is not None else "ADD"
@@ -1750,10 +1750,10 @@ class LLMMemory:
             if (hedge_ctx is text and tgt is not None and act in (Action.SUPERSEDE, Action.RETRACT, Action.REFINE)
                     and _latest_done(text, tgt.value) is not None):
                 hedge_ctx = _latest_done(text, tgt.value)
-            old = getattr(self, "_old_sents", set())
-            if old:
+            carried: set = getattr(self, "_old_sents", set())
+            if carried:
                 evidence = _naming(text, [val, tgt.value if tgt is not None else ""])
-                if evidence and all(_norm_utterance(x) in old for x in evidence) and any(
+                if evidence and all(_norm_utterance(x) in carried for x in evidence) and any(
                         (x.metadata or {}).get("resolved") == "rejected" and x.subject == subj
                         and x.supersedes == (tgt.id if tgt is not None else None)
                         and (canon(x.value) == canon(val) or _list_identity(x.value) == _list_identity(val))
