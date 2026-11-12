@@ -52,7 +52,7 @@ vCoff and vC2 replay one logged Haiku draw through the code, so their difference
 
 ## Automatic mode: no person answers (2026-11-07)
 
-A blind Sonnet 5.5 check (`VAYL_ESCALATE_MODEL=claude-sonnet-5-5`, off by default) replaces the reviewer. It never sees the proposal: it reads the message and states each affected field as it stands now, and code applies a change only when that reading agrees. It decides the proposals and also re-checks every change the gates applied by themselves on a gated slot; a change it does not agree with goes back to a proposal and the old value stands. Pasted or retrieved text is never decided this way.
+A blind Sonnet 5.5 check (`VAYL_ESCALATE_MODEL`, default `claude-sonnet-5-5` when `ANTHROPIC_API_KEY` is set, otherwise off) replaces the reviewer. It never sees the proposal: it reads the message and states each affected field as it stands now, and code applies a change only when that reading agrees. It decides the proposals and also re-checks every change the gates applied by themselves on a gated slot; a change it does not agree with goes back to a proposal and the old value stands. Pasted or retrieved text is never decided this way.
 
 Replays of the same logged Haiku draws (short and long notes, both sets, 270 runs), with the scorer fixes below:
 
